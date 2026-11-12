@@ -89,3 +89,47 @@ export interface UserProfile {
   displayName: string | null;
   photoURL: string | null;
 }
+
+export type MaterialFinishType = 'obsidian_titanium' | 'brushed_gold' | 'iridescent_chrome' | 'emerald_matrix' | 'celestial_platinum';
+
+export type PedestalStyleType = 'minimal_slate' | 'floating_obsidian' | 'golden_sanctuary' | 'cyber_monolith';
+
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  category: 'habit' | 'mastery' | 'intel' | 'velocity';
+  icon: string;
+  tokenReward: number;
+  artifactId: string;
+  unlockedAt?: string;
+  progress: number; // 0 to 1
+  requirementLabel: string;
+}
+
+export interface TrophyArtifact {
+  id: string;
+  name: string;
+  subtitle: string;
+  lore: string;
+  achievementId: string;
+  defaultFinish: MaterialFinishType;
+  unlocked: boolean;
+  unlockedAt?: string;
+  meshType: 'synaptic_spark' | 'memory_prism' | 'chrono_compass' | 'neuro_lattice' | 'feynman_monolith' | 'polymath_sphere' | 'cognitive_ascendant';
+}
+
+export interface UserGamificationProfile {
+  tokens: number;
+  lifetimeTokensEarned: number;
+  unlockedAchievements: string[]; // achievement IDs
+  unlockedFinishes: MaterialFinishType[];
+  unlockedPedestals: PedestalStyleType[];
+  activeFinish: MaterialFinishType;
+  activePedestal: PedestalStyleType;
+  currentStreak: number;
+  longestStreak: number;
+  lastStudyDate?: string;
+  level: number;
+  levelTitle: string;
+}

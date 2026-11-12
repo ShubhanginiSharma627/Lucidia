@@ -144,12 +144,12 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
+    <div className="w-full max-w-7xl mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6 overflow-hidden">
       {/* Top Controls Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-1 flex items-center gap-2 sm:gap-2.5">
-            <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400" />
+            <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400 shrink-0" />
             <span>Spaced Revision Calendar</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
@@ -201,9 +201,9 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
       )}
 
       {/* Main Grid: Calendar Month Grid (Left 7-8 cols) & Selected Day Drawer (Right 4-5 cols) */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-5 lg:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 lg:gap-6">
         {/* Calendar Grid Container */}
-        <div className="md:col-span-7 lg:col-span-8 bg-slate-900/80 border border-slate-800 rounded-2xl p-3 sm:p-5 lg:p-6 shadow-xl space-y-3 sm:space-y-4">
+        <div className="md:col-span-7 lg:col-span-8 bg-slate-900/80 border border-slate-800 rounded-2xl p-3 sm:p-4 lg:p-6 shadow-xl space-y-3 sm:space-y-4 overflow-hidden">
           {/* Month Navigation Header */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
             <div className="flex items-center gap-2 sm:gap-3">
@@ -262,7 +262,7 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
                 <div
                   key={idx}
                   onClick={() => setSelectedDateStr(cell.dateStr)}
-                  className={`min-h-[58px] sm:min-h-[92px] p-1 sm:p-1.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                  className={`min-h-[58px] sm:min-h-[76px] lg:min-h-[92px] p-1 sm:p-1.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
                     isSelected
                       ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500/50'
                       : cell.isCurrentMonth
@@ -366,7 +366,7 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
         </div>
 
         {/* Selected Day Inspector & Study Logger Drawer */}
-        <div className="md:col-span-5 lg:col-span-4 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 lg:p-6 shadow-xl space-y-4 sm:space-y-5 flex flex-col justify-between">
+        <div className="md:col-span-5 lg:col-span-4 bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 sm:p-4 lg:p-6 shadow-xl space-y-3 sm:space-y-4 lg:space-y-5 flex flex-col justify-between overflow-hidden">
           <div className="space-y-4">
             {/* Drawer Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">

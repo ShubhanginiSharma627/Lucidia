@@ -1,8 +1,8 @@
 import React from 'react';
 import { User } from 'firebase/auth';
-import { Calendar, BookOpen, Sliders, BarChart2, LogIn, LogOut, CheckCircle2, Menu } from 'lucide-react';
+import { Calendar, BookOpen, Sliders, BarChart2, LogIn, LogOut, CheckCircle2, Menu, Trophy, Coins } from 'lucide-react';
 
-export type NavTab = 'calendar' | 'subjects' | 'schedules' | 'analytics';
+export type NavTab = 'calendar' | 'subjects' | 'schedules' | 'analytics' | 'vault';
 
 interface HeaderProps {
   activeTab: NavTab;
@@ -13,6 +13,7 @@ interface HeaderProps {
   onSignOut: () => void;
   isSyncing?: boolean;
   onOpenMobileNav: () => void;
+  tokens?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,31 +25,33 @@ export const Header: React.FC<HeaderProps> = ({
   onSignOut,
   isSyncing,
   onOpenMobileNav,
+  tokens = 0,
 }) => {
   return (
-    <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-3.5 sm:px-6 py-2.5 sm:py-3">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-8">
+    <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-2.5 sm:px-4 lg:px-6 py-2 sm:py-2.5 w-full max-w-full overflow-hidden">
+      <div className="w-full max-w-7xl mx-auto flex items-center justify-between gap-1.5 sm:gap-2 md:gap-3 lg:gap-6">
         {/* Zone 1: Brand Wordmark (Single text element) */}
         <button
           onClick={() => onTabChange('calendar')}
-          className="text-lg font-bold tracking-tight text-white hover:text-indigo-300 transition-colors whitespace-nowrap shrink-0 flex items-center gap-2"
+          className="text-base sm:text-lg font-bold tracking-tight text-white hover:text-indigo-300 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 sm:gap-2"
         >
           <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500 rotate-45 inline-block" aria-hidden="true" />
           <span>Lucidia</span>
         </button>
 
-        {/* Zone 2: 4 Single-Line Navigation Links (Tablet & Desktop) */}
-        <nav className="hidden md:flex items-center gap-2 lg:gap-5 xl:gap-7 text-xs lg:text-sm font-medium text-slate-400">
+        {/* Zone 2: Navigation Links (Tablet & Desktop with Compact Labels on Tablet) */}
+        <nav className="hidden md:flex items-center gap-1 lg:gap-2.5 xl:gap-5 text-xs lg:text-sm font-medium text-slate-400">
           <button
             onClick={() => onTabChange('calendar')}
-            className={`whitespace-nowrap shrink-0 transition-colors py-1 relative flex items-center gap-1.5 ${
+            className={`whitespace-nowrap shrink-0 transition-colors px-1.5 md:px-2 lg:px-2.5 py-1 relative flex items-center gap-1 lg:gap-1.5 ${
               activeTab === 'calendar' ? 'text-indigo-400 font-semibold' : 'hover:text-slate-200'
             }`}
           >
             <Calendar className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-            <span>Revision Calendar</span>
+            <span className="hidden xl:inline">Revision Calendar</span>
+            <span className="inline xl:hidden">Calendar</span>
             {dueSubjectsCount > 0 && (
-              <span className="text-[11px] lg:text-xs text-indigo-300/90 font-mono tabular-nums">
+              <span className="text-[10px] lg:text-xs text-indigo-300/90 font-mono tabular-nums">
                 ({dueSubjectsCount})
               </span>
             )}
@@ -59,12 +62,13 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => onTabChange('subjects')}
-            className={`whitespace-nowrap shrink-0 transition-colors py-1 relative flex items-center gap-1.5 ${
+            className={`whitespace-nowrap shrink-0 transition-colors px-1.5 md:px-2 lg:px-2.5 py-1 relative flex items-center gap-1 lg:gap-1.5 ${
               activeTab === 'subjects' ? 'text-indigo-400 font-semibold' : 'hover:text-slate-200'
             }`}
           >
             <BookOpen className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-            <span>Subjects & Categories</span>
+            <span className="hidden xl:inline">Subjects & Categories</span>
+            <span className="inline xl:hidden">Subjects</span>
             {activeTab === 'subjects' && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
             )}
@@ -72,12 +76,13 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => onTabChange('schedules')}
-            className={`whitespace-nowrap shrink-0 transition-colors py-1 relative flex items-center gap-1.5 ${
+            className={`whitespace-nowrap shrink-0 transition-colors px-1.5 md:px-2 lg:px-2.5 py-1 relative flex items-center gap-1.5 ${
               activeTab === 'schedules' ? 'text-indigo-400 font-semibold' : 'hover:text-slate-200'
             }`}
           >
             <Sliders className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-            <span>Revision Schedules</span>
+            <span className="hidden xl:inline">Revision Schedules</span>
+            <span className="inline xl:hidden">Schedules</span>
             {activeTab === 'schedules' && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
             )}
@@ -85,20 +90,46 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={() => onTabChange('analytics')}
-            className={`whitespace-nowrap shrink-0 transition-colors py-1 relative flex items-center gap-1.5 ${
+            className={`whitespace-nowrap shrink-0 transition-colors px-1.5 md:px-2 lg:px-2.5 py-1 relative flex items-center gap-1 lg:gap-1.5 ${
               activeTab === 'analytics' ? 'text-indigo-400 font-semibold' : 'hover:text-slate-200'
             }`}
           >
             <BarChart2 className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-            <span>AI Statistics</span>
+            <span className="hidden xl:inline">AI Statistics</span>
+            <span className="inline xl:hidden">AI Stats</span>
             {activeTab === 'analytics' && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 rounded-full" />
             )}
           </button>
+
+          {/* 3D Trophy Vault Tab */}
+          <button
+            onClick={() => onTabChange('vault')}
+            className={`whitespace-nowrap shrink-0 transition-colors px-1.5 md:px-2 lg:px-2.5 py-1 relative flex items-center gap-1 lg:gap-1.5 ${
+              activeTab === 'vault' ? 'text-amber-400 font-semibold' : 'hover:text-slate-200'
+            }`}
+          >
+            <Trophy className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-amber-400" />
+            <span className="hidden xl:inline">Trophy Vault</span>
+            <span className="inline xl:hidden">Vault</span>
+            {activeTab === 'vault' && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-400 rounded-full" />
+            )}
+          </button>
         </nav>
 
-        {/* Zone 3: Google Auth & Mobile Menu Trigger */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Zone 3: Google Auth & Token Pill & Mobile Menu Trigger */}
+        <div className="flex items-center gap-1.5 sm:gap-2 md:gap-2.5 shrink-0">
+          {/* Synaptic Tokens Pill Button */}
+          <button
+            onClick={() => onTabChange('vault')}
+            title="Open 3D Trophy Vault"
+            className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 lg:px-3 py-1 sm:py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 font-mono text-xs font-bold transition-all shadow-sm shrink-0"
+          >
+            <Coins className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+            <span>{tokens}</span>
+            <span className="hidden sm:inline font-sans font-medium text-[11px] text-amber-300/80">⚡</span>
+          </button>
           {user ? (
             <div className="flex items-center gap-2 sm:gap-2.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 sm:px-3 py-1.5">
               {user.photoURL ? (

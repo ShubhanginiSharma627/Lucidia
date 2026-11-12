@@ -50,19 +50,30 @@ export const AIStatisticsDashboard: React.FC<AIStatisticsDashboardProps> = ({
   // Total study time logged
   const totalMinutesStudied = logs.reduce((acc, l) => acc + (l.durationMinutes || 0), 0);
 
-  // 14-day history
-  const dailyHistory: { date: string; label: string; count: number; minutes: number; accuracy: number }[] = [];
-  for (let i = 13; i >= 0; i--) {
+  // Configurable longitudinal history range (7 or 14 days)
+  const [historyDays, setHistoryDays] = useState<7 | 14>(14);
+
+  const dailyHistory: {
+    date: string;
+    dayLabel: string;
+    dateLabel: string;
+    count: number;
+    minutes: number;
+    accuracy: number | null;
+  }[] = [];
+
+  for (let i = historyDays - 1; i >= 0; i--) {
     const d = new Date(Date.now() - i * 86400000);
     const dateStr = d.toISOString().slice(0, 10);
     const dayLogs = filteredLogs.filter(l => l.revisedDate === dateStr);
     const dayCorrect = dayLogs.filter(l => l.rating >= 3).length;
-    const dayAccuracy = dayLogs.length > 0 ? Math.round((dayCorrect / dayLogs.length) * 100) : 100;
+    const dayAccuracy = dayLogs.length > 0 ? Math.round((dayCorrect / dayLogs.length) * 100) : null;
     const dayMinutes = dayLogs.reduce((acc, l) => acc + (l.durationMinutes || 0), 0);
 
     dailyHistory.push({
       date: dateStr,
-      label: d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' }),
+      dayLabel: d.toLocaleDateString('en-US', { weekday: 'short' }),
+      dateLabel: `${d.getMonth() + 1}/${d.getDate()}`,
       count: dayLogs.length,
       minutes: dayMinutes,
       accuracy: dayAccuracy,
@@ -262,130 +273,213 @@ export const AIStatisticsDashboard: React.FC<AIStatisticsDashboardProps> = ({
       {/* Main Longitudinal Visualizers Split */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-8">
-          {/* 14-Day Longitudinal Study Time & Accuracy */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
+          {/* Longitudinal Study Time & Accuracy */}
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-indigo-400" />
-                  <span>14-Day Revision Sessions & Recall Accuracy</span>
+                  <TrendingUp className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span>{historyDays}-Day Revision Sessions & Recall Accuracy</span>
                 </h3>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-slate-400 mt-0.5">
                   Daily logged revision volume (bars) and evaluation accuracy % (line)
                 </div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-slate-400">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 bg-indigo-500 rounded-sm" />
-                  Sessions
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-0.5 bg-emerald-400" />
-                  Accuracy %
-                </span>
+
+              <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+                {/* 7D / 14D Range Switcher */}
+                <div className="flex items-center bg-slate-950/80 border border-slate-800 rounded-lg p-0.5 text-xs font-medium">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryDays(7)}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      historyDays === 7 ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    7 Days
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryDays(14)}
+                    className={`px-2.5 py-1 rounded-md transition-colors ${
+                      historyDays === 14 ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    14 Days
+                  </button>
+                </div>
+
+                {/* Legend */}
+                <div className="flex items-center gap-3 text-xs text-slate-400 bg-slate-950/70 border border-slate-800/80 rounded-lg px-3 py-1.5 whitespace-nowrap">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 bg-indigo-500 rounded-sm" />
+                    Sessions
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-1 bg-emerald-400 rounded-full" />
+                    Accuracy %
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="h-52 w-full pt-4">
-              <svg className="w-full h-full overflow-visible" viewBox="0 0 700 160" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="subjBarGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6366f1" stopOpacity="0.85" />
-                    <stop offset="100%" stopColor="#4338ca" stopOpacity="0.25" />
-                  </linearGradient>
-                </defs>
+            {/* Scrollable Container on Mobile */}
+            <div className="w-full overflow-x-auto pb-2 scrollbar-thin">
+              {(() => {
+                const chartWidth = historyDays === 7 ? 480 : 700;
+                const chartHeight = 175;
+                const slotWidth = chartWidth / historyDays;
+                const barWidth = historyDays === 7 ? 36 : 24;
+                const maxCount = Math.max(4, ...dailyHistory.map(d => d.count));
+                const baselineY = 135;
+                const maxBarHeight = 88;
 
-                <line x1="0" y1="40" x2="700" y2="40" stroke="#1e293b" strokeDasharray="4 4" />
-                <line x1="0" y1="80" x2="700" y2="80" stroke="#1e293b" strokeDasharray="4 4" />
-                <line x1="0" y1="120" x2="700" y2="120" stroke="#1e293b" strokeDasharray="4 4" />
+                // Active points with actual logs & valid accuracy
+                const activePoints = dailyHistory
+                  .map((day, idx) => {
+                    if (day.count === 0 || day.accuracy === null) return null;
+                    const x = idx * slotWidth + slotWidth / 2;
+                    const normAcc = Math.max(0, Math.min(1, day.accuracy / 100));
+                    const y = baselineY - normAcc * 95;
+                    return { x, y, day };
+                  })
+                  .filter((p): p is { x: number; y: number; day: typeof dailyHistory[0] } => p !== null);
 
-                {dailyHistory.map((day, idx) => {
-                  const maxCount = Math.max(6, ...dailyHistory.map(d => d.count));
-                  const barWidth = 32;
-                  const x = 20 + idx * 48;
-                  const barHeight = (day.count / maxCount) * 110;
-                  const y = 140 - barHeight;
+                return (
+                  <svg
+                    className="w-full h-52 overflow-visible"
+                    style={{ minWidth: historyDays === 7 ? '360px' : '560px' }}
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    preserveAspectRatio="xMidYMid meet"
+                  >
+                    <defs>
+                      <linearGradient id="subjBarGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#6366f1" stopOpacity="0.9" />
+                        <stop offset="100%" stopColor="#3730a3" stopOpacity="0.3" />
+                      </linearGradient>
+                      <filter id="emeraldGlow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#10b981" floodOpacity="0.5" />
+                      </filter>
+                    </defs>
 
-                  return (
-                    <g key={day.date} className="group cursor-pointer">
-                      <rect
-                        x={x}
-                        y={y}
-                        width={barWidth}
-                        height={barHeight}
-                        rx="4"
-                        fill="url(#subjBarGradient)"
-                        className="transition-all hover:opacity-100 opacity-80"
-                      />
-                      <text
-                        x={x + barWidth / 2}
-                        y="155"
-                        textAnchor="middle"
-                        fill="#64748b"
-                        fontSize="9"
-                        fontFamily="monospace"
-                      >
-                        {day.label.split(',')[0]}
-                      </text>
-                      <text
-                        x={x + barWidth / 2}
-                        y={Math.max(12, y - 5)}
-                        textAnchor="middle"
-                        fill="#cbd5e1"
-                        fontSize="10"
-                        fontWeight="600"
-                        fontFamily="monospace"
-                      >
-                        {day.count}
-                      </text>
-                    </g>
-                  );
-                })}
+                    {/* Horizontal reference dashed lines */}
+                    <line x1="10" y1="40" x2={chartWidth - 10} y2="40" stroke="#1e293b" strokeDasharray="4 4" strokeWidth="1" />
+                    <line x1="10" y1="88" x2={chartWidth - 10} y2="88" stroke="#1e293b" strokeDasharray="4 4" strokeWidth="1" />
+                    <line x1="10" y1={baselineY} x2={chartWidth - 10} y2={baselineY} stroke="#334155" strokeWidth="1" />
 
-                {(() => {
-                  const points = dailyHistory.map((day, idx) => {
-                    const x = 20 + idx * 48 + 16;
-                    const normAcc = Math.max(0, Math.min(1, (day.accuracy - 60) / 40));
-                    const y = 130 - normAcc * 115;
-                    return `${x},${y}`;
-                  }).join(' ');
+                    {/* Bars and labels */}
+                    {dailyHistory.map((day, idx) => {
+                      const xCenter = idx * slotWidth + slotWidth / 2;
+                      const xBar = xCenter - barWidth / 2;
+                      const barHeight = day.count > 0 ? Math.max(6, (day.count / maxCount) * maxBarHeight) : 3;
+                      const yBar = baselineY - barHeight;
 
-                  return (
-                    <>
+                      return (
+                        <g key={day.date} className="group">
+                          {/* Base slot indicator / filled bar */}
+                          <rect
+                            x={xBar}
+                            y={yBar}
+                            width={barWidth}
+                            height={barHeight}
+                            rx="4"
+                            fill={day.count > 0 ? 'url(#subjBarGradient)' : '#1e293b'}
+                            className="transition-all hover:opacity-100"
+                          />
+
+                          {/* Session count label */}
+                          <text
+                            x={xCenter}
+                            y={day.count > 0 ? yBar - 6 : baselineY - 8}
+                            textAnchor="middle"
+                            fill={day.count > 0 ? '#cbd5e1' : '#475569'}
+                            fontSize="11"
+                            fontWeight={day.count > 0 ? '700' : '500'}
+                          >
+                            {day.count}
+                          </text>
+
+                          {/* Day abbreviation (e.g. Fri) */}
+                          <text
+                            x={xCenter}
+                            y={baselineY + 16}
+                            textAnchor="middle"
+                            fill="#94a3b8"
+                            fontSize="10"
+                            fontWeight="500"
+                          >
+                            {day.dayLabel}
+                          </text>
+
+                          {/* Date label (e.g. 11/12) */}
+                          <text
+                            x={xCenter}
+                            y={baselineY + 28}
+                            textAnchor="middle"
+                            fill="#64748b"
+                            fontSize="9"
+                            fontFamily="monospace"
+                          >
+                            {day.dateLabel}
+                          </text>
+                        </g>
+                      );
+                    })}
+
+                    {/* Accuracy Polyline & Glowing Dots (Rendered only when active days exist) */}
+                    {activePoints.length >= 2 && (
                       <polyline
                         fill="none"
                         stroke="#34d399"
                         strokeWidth="2.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        points={points}
+                        points={activePoints.map(p => `${p.x},${p.y}`).join(' ')}
+                        filter="url(#emeraldGlow)"
                       />
-                      {dailyHistory.map(day => {
-                        const idx = dailyHistory.indexOf(day);
-                        const x = 20 + idx * 48 + 16;
-                        const normAcc = Math.max(0, Math.min(1, (day.accuracy - 60) / 40));
-                        const y = 130 - normAcc * 115;
-                        return (
-                          <circle
-                            key={`dot-${day.date}`}
-                            cx={x}
-                            cy={y}
-                            r="3.5"
-                            fill="#0f172a"
-                            stroke="#34d399"
-                            strokeWidth="2"
-                          />
-                        );
-                      })}
-                    </>
-                  );
-                })()}
-              </svg>
+                    )}
+
+                    {activePoints.map((pt, i) => (
+                      <g key={i}>
+                        <circle
+                          cx={pt.x}
+                          cy={pt.y}
+                          r="4"
+                          fill="#0f172a"
+                          stroke="#34d399"
+                          strokeWidth="2.5"
+                        />
+                        <text
+                          x={pt.x}
+                          y={pt.y - 8}
+                          textAnchor="middle"
+                          fill="#6ee7b7"
+                          fontSize="9"
+                          fontWeight="700"
+                          fontFamily="monospace"
+                        >
+                          {pt.day.accuracy}%
+                        </text>
+                      </g>
+                    ))}
+                  </svg>
+                );
+              })()}
             </div>
+
+            {/* Helpful indicator when no sessions are logged yet */}
+            {dailyHistory.reduce((acc, d) => acc + d.count, 0) === 0 && (
+              <div className="mt-2 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping" />
+                  <span>No revisions logged in this window. Practice your calendar reviews to plot recall trends.</span>
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Ebbinghaus Forgetting Curve Simulator */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl">
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
@@ -398,8 +492,8 @@ export const AIStatisticsDashboard: React.FC<AIStatisticsDashboardProps> = ({
               </div>
             </div>
 
-            <div className="h-52 w-full pt-2">
-              <svg className="w-full h-full overflow-visible" viewBox="0 0 700 180" preserveAspectRatio="none">
+            <div className="w-full overflow-x-auto pb-2 scrollbar-thin">
+              <svg className="w-full h-48 min-w-[540px] overflow-visible" viewBox="0 0 700 180" preserveAspectRatio="xMidYMid meet">
                 <line x1="40" y1="20" x2="680" y2="20" stroke="#334155" strokeDasharray="3 3" />
                 <text x="35" y="24" textAnchor="end" fill="#64748b" fontSize="10" fontFamily="monospace">100%</text>
 

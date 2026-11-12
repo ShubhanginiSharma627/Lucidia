@@ -13,6 +13,8 @@ import {
   Plus,
   Play,
   Sparkles,
+  Trophy,
+  Coins,
 } from 'lucide-react';
 
 interface MobileNavDrawerProps {
@@ -26,6 +28,7 @@ interface MobileNavDrawerProps {
   onSignOut: () => void;
   onQuickLogRevision?: () => void;
   onQuickAddSubject?: () => void;
+  tokens?: number;
 }
 
 export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
@@ -39,6 +42,7 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
   onSignOut,
   onQuickLogRevision,
   onQuickAddSubject,
+  tokens = 0,
 }) => {
   // Prevent background body scroll when drawer is open
   useEffect(() => {
@@ -84,6 +88,12 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
       id: 'analytics',
       label: 'AI Statistics',
       icon: BarChart2,
+    },
+    {
+      id: 'vault',
+      label: '3D Trophy Vault',
+      icon: Trophy,
+      badge: `${tokens} ⚡`,
     },
   ];
 

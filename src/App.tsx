@@ -28,14 +28,26 @@ import {
   subscribeToUserUserData,
 } from './services/firebase';
 import { calculateNextSubjectRevision, formatDateToYYYYMMDD } from './services/spacedRepetition';
+import {
+  UserGamificationProfile,
+  Achievement,
+} from './types';
+import {
+  loadGamificationProfile,
+  saveGamificationProfile,
+  evaluateAchievements,
+  calculateSessionTokens,
+} from './services/gamification';
 import { Header, NavTab } from './components/Header';
 import { MobileNavDrawer } from './components/MobileNavDrawer';
 import { RevisionCalendar } from './components/RevisionCalendar';
 import { SubjectCategoryManager } from './components/SubjectCategoryManager';
 import { CustomScheduleManager } from './components/CustomScheduleManager';
 import { AIStatisticsDashboard } from './components/AIStatisticsDashboard';
+import { TrophyVault3D } from './components/TrophyVault3D';
 import { LogSessionModal } from './components/LogSessionModal';
 import { NeuralCanvas } from './components/NeuralCanvas';
+import { Trophy, Award, Sparkles, X, ArrowRight } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -44,6 +56,17 @@ export default function App() {
   const [schedules, setSchedules] = useState<RevisionSchedule[]>(() => getSchedules());
   const [logs, setLogs] = useState<RevisionLog[]>(() => getRevisionLogs());
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisResult | null>(() => getCachedAIAnalysis());
+
+  // Gamification state
+  const [gamificationProfile, setGamificationProfile] = useState<UserGamificationProfile>(() =>
+    loadGamificationProfile()
+  );
+  const [achievements, setAchievements] = useState<Achievement[]>(() => {
+    const prof = loadGamificationProfile();
+    const evaluated = evaluateAchievements(prof, getSubjects(), getCategories(), getRevisionLogs());
+    return evaluated.achievementsWithProgress;
+  });
+  const [unlockedCelebration, setUnlockedCelebration] = useState<Achievement | null>(null);
 
   const [activeTab, setActiveTab] = useState<NavTab>('calendar');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -54,6 +77,12 @@ export default function App() {
   const [preselectedDateForNewSubject, setPreselectedDateForNewSubject] = useState<string | undefined>(undefined);
   const [isAddSubjectModalOpen, setIsAddSubjectModalOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+
+  // Update gamification profile helper
+  const handleUpdateGamificationProfile = useCallback((updated: UserGamificationProfile) => {
+    setGamificationProfile(updated);
+    saveGamificationProfile(updated);
+  }, []);
 
   // Auth listener & Firestore live sync
   useEffect(() => {
@@ -159,13 +188,45 @@ export default function App() {
       setSubjects(prev => prev.map(s => (s.id === subject.id ? updatedSubject : s)));
       setLogs(prev => [newLog, ...prev]);
 
+      // Calculate token reward for this session
+      const isMasteredLeap = calc.intervalDays >= 30;
+      const tokenEarned = calculateSessionTokens(
+        subject,
+        rating,
+        gamificationProfile.currentStreak,
+        isMasteredLeap
+      );
+
+      // Evaluate new achievements & update profile
+      const newLogsList = [newLog, ...logs];
+      const newSubjectsList = subjects.map(s => (s.id === subject.id ? updatedSubject : s));
+
+      const evaluation = evaluateAchievements(
+        {
+          ...gamificationProfile,
+          tokens: gamificationProfile.tokens + tokenEarned.totalTokens,
+          lifetimeTokensEarned: gamificationProfile.lifetimeTokensEarned + tokenEarned.totalTokens,
+        },
+        newSubjectsList,
+        categories,
+        newLogsList
+      );
+
+      setGamificationProfile(evaluation.updatedProfile);
+      saveGamificationProfile(evaluation.updatedProfile);
+      setAchievements(evaluation.achievementsWithProgress);
+
+      if (evaluation.newlyUnlocked.length > 0) {
+        setUnlockedCelebration(evaluation.newlyUnlocked[0]);
+      }
+
       // Cloud Firestore sync if authenticated
       if (user) {
         syncSubject(user.uid, updatedSubject);
         syncLog(user.uid, newLog);
       }
     },
-    [schedules, user]
+    [schedules, user, gamificationProfile, logs, subjects, categories]
   );
 
   // Subject management
@@ -334,7 +395,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col relative selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col relative w-full max-w-full overflow-x-hidden selection:bg-indigo-500/30 selection:text-indigo-200">
       {/* Background Neural Canvas */}
       <div className="fixed inset-0 pointer-events-none opacity-20 z-0 overflow-hidden">
         <NeuralCanvas intensity="subtle" interactive={false} />
@@ -349,10 +410,53 @@ export default function App() {
         onSignInWithGoogle={signInWithGoogle}
         onSignOut={logOut}
         onOpenMobileNav={() => setIsMobileNavOpen(true)}
+        tokens={gamificationProfile.tokens}
       />
 
+      {/* Achievement Unlocked Floating Celebration Banner */}
+      {unlockedCelebration && (
+        <div className="fixed top-16 right-4 sm:right-6 z-50 max-w-sm w-full bg-slate-900/95 backdrop-blur-md border border-amber-500/60 rounded-2xl p-4 shadow-2xl animate-bounce-subtle ring-1 ring-amber-500/40">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
+                <Trophy className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 font-mono">
+                  Achievement Unlocked!
+                </span>
+                <h4 className="text-sm font-bold text-white leading-tight">
+                  {unlockedCelebration.title}
+                </h4>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  +{unlockedCelebration.tokenReward} Synaptic Tokens & 3D Trophy!
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setUnlockedCelebration(null)}
+              className="text-slate-400 hover:text-white p-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="mt-3 flex items-center justify-end gap-2">
+            <button
+              onClick={() => {
+                setActiveTab('vault');
+                setUnlockedCelebration(null);
+              }}
+              className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-colors flex items-center gap-1 shadow-sm"
+            >
+              <span>Inspect in 3D Vault</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Router */}
-      <main className="flex-1 relative z-10 pb-16">
+      <main className={`flex-1 relative z-10 w-full max-w-full overflow-x-hidden ${activeTab === 'vault' ? 'pb-0' : 'pb-16'}`}>
         {activeTab === 'calendar' && (
           <RevisionCalendar
             subjects={subjects}
@@ -413,6 +517,14 @@ export default function App() {
             onApplyScheduleRecommendation={handleApplyScheduleRecommendation}
           />
         )}
+
+        {activeTab === 'vault' && (
+          <TrophyVault3D
+            profile={gamificationProfile}
+            onUpdateProfile={handleUpdateGamificationProfile}
+            achievements={achievements}
+          />
+        )}
       </main>
 
       {/* Root-Level Slide-out Mobile Navigation Drawer */}
@@ -425,6 +537,7 @@ export default function App() {
         user={user}
         onSignInWithGoogle={signInWithGoogle}
         onSignOut={logOut}
+        tokens={gamificationProfile.tokens}
         onQuickLogRevision={() => {
           const firstDue = subjects.find(s => s.nextDueDate <= todayStr) || subjects[0];
           if (firstDue) {
@@ -449,6 +562,7 @@ export default function App() {
         isOpen={Boolean(sessionModalSubject)}
         onClose={() => setSessionModalSubject(null)}
         onSubmitLog={handleSubmitSessionLog}
+        currentStreak={gamificationProfile.currentStreak}
       />
     </div>
   );

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Subject, Rating, RevisionSchedule } from '../types';
 import { calculateNextSubjectRevision, formatInterval, formatDateToYYYYMMDD } from '../services/spacedRepetition';
-import { X, Check, Clock, Sparkles, AlertCircle } from 'lucide-react';
+import { calculateSessionTokens } from '../services/gamification';
+import { X, Check, Clock, Sparkles, AlertCircle, Coins } from 'lucide-react';
 
 interface LogSessionModalProps {
   subject: Subject | null;
@@ -16,6 +17,7 @@ interface LogSessionModalProps {
     notes: string,
     revisedDate: string
   ) => void;
+  currentStreak?: number;
 }
 
 export const LogSessionModal: React.FC<LogSessionModalProps> = ({
@@ -25,6 +27,7 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
   isOpen,
   onClose,
   onSubmitLog,
+  currentStreak = 0,
 }) => {
   const [rating, setRating] = useState<Rating>(3); // default Good
   const [durationMinutes, setDurationMinutes] = useState(25);
@@ -35,6 +38,8 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
 
   const schedule = schedules.find(s => s.id === subject.scheduleId) || schedules[0];
   const calculation = calculateNextSubjectRevision(subject, rating, schedule, new Date(revisedDate + 'T00:00:00'));
+  const isMasteredLeap = calculation.intervalDays >= 30;
+  const tokenEst = calculateSessionTokens(subject, rating, currentStreak, isMasteredLeap);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,6 +142,17 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
               <span className="font-bold text-white">{calculation.nextDueDate}</span>
               <span className="text-slate-500 ml-1.5">(+{formatInterval(calculation.intervalDays)})</span>
             </div>
+          </div>
+
+          {/* Gamified Token Reward Preview */}
+          <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-between text-xs">
+            <span className="flex items-center gap-1.5 text-amber-300 font-medium">
+              <Coins className="w-3.5 h-3.5 text-amber-400" />
+              <span>Session Reward:</span>
+            </span>
+            <span className="font-mono font-bold text-amber-400">
+              +{tokenEst.totalTokens} Synaptic Tokens
+            </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
