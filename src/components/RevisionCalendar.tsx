@@ -144,29 +144,29 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
       {/* Top Controls Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white mb-1 flex items-center gap-2.5">
-            <CalendarIcon className="w-6 h-6 text-indigo-400" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-1 flex items-center gap-2 sm:gap-2.5">
+            <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400" />
             <span>Spaced Revision Calendar</span>
           </h1>
-          <p className="text-sm text-slate-400">
+          <p className="text-xs sm:text-sm text-slate-400">
             Interactive schedule for academic topics and subjects paced across expanding intervals.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {/* Category Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-slate-500" />
+          <div className="flex items-center gap-1.5 flex-1 sm:flex-none">
+            <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" />
             <select
               value={selectedCategoryFilter}
               onChange={e => setSelectedCategoryFilter(e.target.value)}
-              className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs font-medium text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="w-full sm:w-auto min-h-[40px] px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs font-medium text-slate-200 focus:outline-none focus:border-indigo-500"
             >
-              <option value="all">All Categories ({subjects.length} subjects)</option>
+              <option value="all">All Categories ({subjects.length})</option>
               {categories.map(c => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -177,7 +177,7 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
 
           <button
             onClick={() => onOpenAddSubject(selectedDateStr)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition-all whitespace-nowrap"
+            className="min-h-[40px] flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all whitespace-nowrap active:scale-[0.98]"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Subject</span>
@@ -200,15 +200,15 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
         </div>
       )}
 
-      {/* Main Grid: Calendar Month Grid (Left 8 cols) & Selected Day Drawer (Right 4 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {/* Main Grid: Calendar Month Grid (Left 7-8 cols) & Selected Day Drawer (Right 4-5 cols) */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-5 lg:gap-6">
         {/* Calendar Grid Container */}
-        <div className="lg:col-span-8 bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+        <div className="md:col-span-7 lg:col-span-8 bg-slate-900/80 border border-slate-800 rounded-2xl p-3 sm:p-5 lg:p-6 shadow-xl space-y-3 sm:space-y-4">
           {/* Month Navigation Header */}
           <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-bold text-slate-100 font-mono">
-                {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <h2 className="text-base sm:text-lg font-bold text-slate-100 font-mono">
+                {currentDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
               </h2>
               <button
                 onClick={handleGoToday}
@@ -221,14 +221,14 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
             <div className="flex items-center gap-1.5">
               <button
                 onClick={handlePrevMonth}
-                className="p-1.5 text-slate-400 hover:text-white bg-slate-950 border border-slate-800 rounded-lg hover:bg-slate-800 transition-colors"
+                className="min-w-[36px] min-h-[36px] flex items-center justify-center p-1.5 text-slate-400 hover:text-white bg-slate-950 border border-slate-800 rounded-lg hover:bg-slate-800 transition-colors"
                 title="Previous month"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 onClick={handleNextMonth}
-                className="p-1.5 text-slate-400 hover:text-white bg-slate-950 border border-slate-800 rounded-lg hover:bg-slate-800 transition-colors"
+                className="min-w-[36px] min-h-[36px] flex items-center justify-center p-1.5 text-slate-400 hover:text-white bg-slate-950 border border-slate-800 rounded-lg hover:bg-slate-800 transition-colors"
                 title="Next month"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -237,7 +237,7 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
           </div>
 
           {/* Weekday headers */}
-          <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider py-1 font-mono">
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider py-1 font-mono">
             <span>Sun</span>
             <span>Mon</span>
             <span>Tue</span>
@@ -248,7 +248,7 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
           </div>
 
           {/* Day Cells Grid */}
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
             {calendarDays.map((cell, idx) => {
               const isSelected = cell.dateStr === selectedDateStr;
               const isToday = cell.dateStr === todayStr;
@@ -262,7 +262,7 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
                 <div
                   key={idx}
                   onClick={() => setSelectedDateStr(cell.dateStr)}
-                  className={`min-h-[92px] p-1.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                  className={`min-h-[58px] sm:min-h-[92px] p-1 sm:p-1.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
                     isSelected
                       ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500/50'
                       : cell.isCurrentMonth
@@ -273,9 +273,9 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
                   {/* Date number & Today tag */}
                   <div className="flex items-center justify-between">
                     <span
-                      className={`text-xs font-mono font-semibold ${
+                      className={`text-[11px] sm:text-xs font-mono font-semibold ${
                         isToday
-                          ? 'w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center'
+                          ? 'w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] sm:text-xs'
                           : cell.isCurrentMonth
                           ? 'text-slate-300'
                           : 'text-slate-600'
@@ -286,36 +286,67 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
 
                     {dayLogs.length > 0 && (
                       <span title="Study logged on this date">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-400" />
                       </span>
                     )}
                   </div>
 
                   {/* Scheduled subjects chips */}
-                  <div className="space-y-1 mt-1 flex-1 overflow-hidden">
-                    {daySubjects.slice(0, 2).map(sub => {
-                      const color = categoryColorMap[sub.categoryId] || 'indigo';
-                      return (
-                        <div
-                          key={sub.id}
-                          className={`text-[10px] font-medium px-1.5 py-0.5 rounded border truncate ${getColorClasses(color)}`}
-                          title={`${sub.name} (${sub.categoryName})`}
-                        >
-                          {sub.name}
-                        </div>
-                      );
-                    })}
+                  <div className="mt-0.5 sm:mt-1 flex-1 overflow-hidden">
+                    {/* Mobile: compact colored dots */}
+                    <div className="flex sm:hidden flex-wrap gap-1 mt-1 justify-center">
+                      {daySubjects.slice(0, 3).map(sub => {
+                        const color = categoryColorMap[sub.categoryId] || 'indigo';
+                        return (
+                          <span
+                            key={sub.id}
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              color === 'emerald'
+                                ? 'bg-emerald-400'
+                                : color === 'amber'
+                                ? 'bg-amber-400'
+                                : color === 'violet'
+                                ? 'bg-violet-400'
+                                : color === 'rose'
+                                ? 'bg-rose-400'
+                                : color === 'sky'
+                                ? 'bg-sky-400'
+                                : 'bg-indigo-400'
+                            }`}
+                          />
+                        );
+                      })}
+                      {daySubjects.length > 3 && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                      )}
+                    </div>
 
-                    {daySubjects.length > 2 && (
-                      <div className="text-[9px] font-mono text-slate-500 pl-1">
-                        +{daySubjects.length - 2} more
-                      </div>
-                    )}
+                    {/* Tablet & Desktop: detailed label chips */}
+                    <div className="hidden sm:block space-y-1">
+                      {daySubjects.slice(0, 2).map(sub => {
+                        const color = categoryColorMap[sub.categoryId] || 'indigo';
+                        return (
+                          <div
+                            key={sub.id}
+                            className={`text-[10px] font-medium px-1.5 py-0.5 rounded border truncate ${getColorClasses(color)}`}
+                            title={`${sub.name} (${sub.categoryName})`}
+                          >
+                            {sub.name}
+                          </div>
+                        );
+                      })}
+
+                      {daySubjects.length > 2 && (
+                        <div className="text-[9px] font-mono text-slate-500 pl-1">
+                          +{daySubjects.length - 2} more
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Daily Load Meter */}
                   {daySubjects.length > 0 && (
-                    <div className="w-full h-0.5 bg-slate-800 rounded-full overflow-hidden mt-1">
+                    <div className="w-full h-0.5 bg-slate-800 rounded-full overflow-hidden mt-0.5 sm:mt-1">
                       <div
                         className={`h-full ${
                           daySubjects.length >= 4
@@ -335,7 +366,7 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
         </div>
 
         {/* Selected Day Inspector & Study Logger Drawer */}
-        <div className="lg:col-span-4 bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5 flex flex-col justify-between">
+        <div className="md:col-span-5 lg:col-span-4 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-5 lg:p-6 shadow-xl space-y-4 sm:space-y-5 flex flex-col justify-between">
           <div className="space-y-4">
             {/* Drawer Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
@@ -403,9 +434,9 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
                         {/* Action: Log Revision */}
                         <button
                           onClick={() => onOpenLogSession(subject, selectedDateStr)}
-                          className="w-full py-1.5 px-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                          className="w-full min-h-[44px] py-2 px-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
                         >
-                          <Check className="w-3.5 h-3.5" />
+                          <Check className="w-4 h-4" />
                           <span>Log Revision Session</span>
                         </button>
                       </div>
@@ -457,7 +488,7 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
           <div className="pt-3 border-t border-slate-800">
             <button
               onClick={() => onOpenAddSubject(selectedDateStr)}
-              className="w-full py-2 bg-slate-950 hover:bg-slate-800 text-slate-300 font-semibold text-xs rounded-xl border border-slate-800 transition-colors flex items-center justify-center gap-1.5"
+              className="w-full min-h-[44px] py-2.5 bg-slate-950 hover:bg-slate-800 text-slate-300 font-semibold text-xs rounded-xl border border-slate-800 transition-colors flex items-center justify-center gap-1.5 active:scale-[0.98]"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Schedule New Subject on this Date</span>

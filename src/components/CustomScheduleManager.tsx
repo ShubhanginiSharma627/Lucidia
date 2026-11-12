@@ -72,31 +72,31 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
   const assignedSubjects = subjects.filter(s => s.scheduleId === activeScheduleToSimulate.id);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5 sm:space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white mb-1 flex items-center gap-2.5">
-            <Sliders className="w-6 h-6 text-indigo-400" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-1 flex items-center gap-2.5">
+            <Sliders className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400" />
             <span>Custom Revision Schedules</span>
           </h1>
-          <p className="text-sm text-slate-400">
+          <p className="text-xs sm:text-sm text-slate-400">
             Configure spaced repetition curves, interval multipliers, and assign them directly to categories and subjects.
           </p>
         </div>
 
         <button
           onClick={handleCreateNew}
-          className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition-all whitespace-nowrap self-start"
+          className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all whitespace-nowrap self-stretch sm:self-auto active:scale-[0.98]"
         >
           <Plus className="w-4 h-4" />
           <span>New Custom Schedule</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-5 sm:gap-6 lg:gap-8">
         {/* Left Column: Schedule Selection List */}
-        <div className="lg:col-span-4 space-y-3">
+        <div className="md:col-span-5 lg:col-span-4 space-y-3">
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
             Available Schedules ({schedules.length})
           </div>
@@ -143,7 +143,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
         </div>
 
         {/* Right Column: Schedule Editor & Live Simulation */}
-        <div className="lg:col-span-8 space-y-6">
+        <div className="md:col-span-7 lg:col-span-8 space-y-6">
           {/* Schedule Configuration Card */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
             <div className="flex items-center justify-between gap-4 pb-4 border-b border-slate-800">

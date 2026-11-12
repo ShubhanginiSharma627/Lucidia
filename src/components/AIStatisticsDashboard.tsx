@@ -70,29 +70,29 @@ export const AIStatisticsDashboard: React.FC<AIStatisticsDashboardProps> = ({
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5 sm:space-y-8">
       {/* Top Banner & AI Run CTA */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-slate-900/90 border border-slate-800 rounded-2xl relative overflow-hidden shadow-2xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 sm:p-6 bg-slate-900/90 border border-slate-800 rounded-2xl relative overflow-hidden shadow-2xl">
         <div className="relative z-10">
           <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
             <Brain className="w-4 h-4" />
             <span>Integrated AI Cognitive Learning Intelligence</span>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white mb-2">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-2">
             Subject Memory Retention & Spacing Analytics
           </h1>
-          <p className="text-sm text-slate-400 max-w-2xl leading-relaxed">
+          <p className="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
             Ebbinghaus forgetting curve modeling, synaptic stability indices, and Gemini-powered cognitive audits across your subject revision calendar.
           </p>
         </div>
 
-        <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+        <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 shrink-0">
           <select
             value={selectedCategoryFilter}
             onChange={e => setSelectedCategoryFilter(e.target.value)}
-            className="px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs font-medium text-slate-200 focus:outline-none focus:border-indigo-500"
+            className="min-h-[44px] px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-medium text-slate-200 focus:outline-none focus:border-indigo-500"
           >
-            <option value="all">All Categories ({subjects.length} subjects)</option>
+            <option value="all">All Categories ({subjects.length})</option>
             {categories.map(c => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -103,7 +103,7 @@ export const AIStatisticsDashboard: React.FC<AIStatisticsDashboardProps> = ({
           <button
             onClick={onRefreshAIAnalysis}
             disabled={isAnalyzing}
-            className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800/50 rounded-lg shadow-sm transition-all"
+            className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800/50 rounded-xl shadow-sm transition-all active:scale-[0.98]"
           >
             <Sparkles className={`w-3.5 h-3.5 ${isAnalyzing ? 'animate-spin' : ''}`} />
             <span>{isAnalyzing ? 'Analyzing Retention Patterns...' : 'Run Cognitive Audit'}</span>
@@ -112,7 +112,7 @@ export const AIStatisticsDashboard: React.FC<AIStatisticsDashboardProps> = ({
       </div>
 
       {/* KPI Metrics Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="p-5 bg-slate-900/70 border border-slate-800 rounded-xl">
           <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
             <span>Estimated Retention Rate</span>

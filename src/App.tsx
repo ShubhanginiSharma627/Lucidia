@@ -29,6 +29,7 @@ import {
 } from './services/firebase';
 import { calculateNextSubjectRevision, formatDateToYYYYMMDD } from './services/spacedRepetition';
 import { Header, NavTab } from './components/Header';
+import { MobileNavDrawer } from './components/MobileNavDrawer';
 import { RevisionCalendar } from './components/RevisionCalendar';
 import { SubjectCategoryManager } from './components/SubjectCategoryManager';
 import { CustomScheduleManager } from './components/CustomScheduleManager';
@@ -52,6 +53,7 @@ export default function App() {
   const [sessionModalTargetDate, setSessionModalTargetDate] = useState<string | undefined>(undefined);
   const [preselectedDateForNewSubject, setPreselectedDateForNewSubject] = useState<string | undefined>(undefined);
   const [isAddSubjectModalOpen, setIsAddSubjectModalOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   // Auth listener & Firestore live sync
   useEffect(() => {
@@ -346,6 +348,7 @@ export default function App() {
         user={user}
         onSignInWithGoogle={signInWithGoogle}
         onSignOut={logOut}
+        onOpenMobileNav={() => setIsMobileNavOpen(true)}
       />
 
       {/* Main Content Router */}
@@ -411,6 +414,32 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Root-Level Slide-out Mobile Navigation Drawer */}
+      <MobileNavDrawer
+        isOpen={isMobileNavOpen}
+        onClose={() => setIsMobileNavOpen(false)}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        dueSubjectsCount={dueSubjectsCount}
+        user={user}
+        onSignInWithGoogle={signInWithGoogle}
+        onSignOut={logOut}
+        onQuickLogRevision={() => {
+          const firstDue = subjects.find(s => s.nextDueDate <= todayStr) || subjects[0];
+          if (firstDue) {
+            setSessionModalSubject(firstDue);
+            setSessionModalTargetDate(todayStr);
+          } else {
+            setActiveTab('calendar');
+          }
+        }}
+        onQuickAddSubject={() => {
+          setPreselectedDateForNewSubject(todayStr);
+          setIsAddSubjectModalOpen(true);
+          setActiveTab('subjects');
+        }}
+      />
 
       {/* Log Session Modal */}
       <LogSessionModal
