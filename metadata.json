@@ -1,0 +1,6 @@
+{
+  "name": "Synapse - Spaced Repetition & AI Learning Analytics",
+  "description": "Neuroscience-backed spaced repetition application with customizable revision schedules and integrated AI cognitive analytics for monitoring memory retention over time.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

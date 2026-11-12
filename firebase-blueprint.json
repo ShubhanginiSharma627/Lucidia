@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "Category": {
+      "title": "Category",
+      "description": "A high-level subject domain or academic category.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "color": { "type": "string", "maxLength": 30 },
+        "description": { "type": "string", "maxLength": 500 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "userId", "createdAt"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "An academic topic, course, or skill scheduled for spaced revision.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 150 },
+        "categoryId": { "type": "string", "maxLength": 128 },
+        "categoryName": { "type": "string", "maxLength": 100 },
+        "scheduleId": { "type": "string", "maxLength": 128 },
+        "revisionStage": { "type": "number" },
+        "intervalDays": { "type": "number" },
+        "stability": { "type": "number" },
+        "difficulty": { "type": "number" },
+        "nextDueDate": { "type": "string", "maxLength": 32 },
+        "lastRevisedAt": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["due", "scheduled", "mastered"] },
+        "notes": { "type": "string", "maxLength": 5000 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "categoryId", "scheduleId", "userId", "nextDueDate", "createdAt"]
+    },
+    "RevisionSchedule": {
+      "title": "RevisionSchedule",
+      "description": "Spaced repetition algorithm configuration for pacing revisions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 500 },
+        "algorithm": { "type": "string", "enum": ["sm2_custom", "fsrs_custom", "exponential_custom", "fixed_intervals"] },
+        "intervalMultiplier": { "type": "number" },
+        "targetRetention": { "type": "number" },
+        "learningSteps": { "type": "array" },
+        "graduatingInterval": { "type": "number" },
+        "easyInterval": { "type": "number" },
+        "easyBonus": { "type": "number" },
+        "hardPenalty": { "type": "number" },
+        "lapseResetPercentage": { "type": "number" },
+        "maximumInterval": { "type": "number" },
+        "customStepsLadder": { "type": "array" },
+        "userId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "name", "algorithm", "intervalMultiplier", "targetRetention", "userId"]
+    },
+    "RevisionLog": {
+      "title": "RevisionLog",
+      "description": "A recorded study session event evaluating a subject.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "subjectId": { "type": "string", "maxLength": 128 },
+        "subjectName": { "type": "string", "maxLength": 150 },
+        "categoryId": { "type": "string", "maxLength": 128 },
+        "rating": { "type": "number" },
+        "durationMinutes": { "type": "number" },
+        "revisedDate": { "type": "string", "maxLength": 32 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "previousInterval": { "type": "number" },
+        "newInterval": { "type": "number" },
+        "userId": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "subjectId", "rating", "revisedDate", "userId", "timestamp"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Basic authenticated learner profile metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 200 },
+        "displayName": { "type": "string", "maxLength": 150 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "email"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile document."
+    },
+    "/users/{userId}/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "User-defined categories grouping subjects."
+    },
+    "/users/{userId}/subjects/{subjectId}": {
+      "schema": { "$ref": "#/entities/Subject" },
+      "description": "User subjects scheduled for revision."
+    },
+    "/users/{userId}/schedules/{scheduleId}": {
+      "schema": { "$ref": "#/entities/RevisionSchedule" },
+      "description": "Custom revision schedules belonging to the user."
+    },
+    "/users/{userId}/logs/{logId}": {
+      "schema": { "$ref": "#/entities/RevisionLog" },
+      "description": "Historical revision logs and session evaluations."
+    }
+  }
+}

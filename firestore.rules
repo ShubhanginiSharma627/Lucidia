@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User profile document
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && incoming().id == userId
+        && incoming().email is string
+        && incoming().email.size() <= 200;
+      allow update: if isOwner(userId)
+        && incoming().id == userId
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'email']);
+      allow delete: if false;
+
+      // Categories subcollection
+      match /categories/{categoryId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(categoryId)
+          && incoming().id == categoryId
+          && incoming().userId == userId
+          && incoming().name is string
+          && incoming().name.size() > 0
+          && incoming().name.size() <= 100;
+        allow update: if isOwner(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().name is string
+          && incoming().name.size() > 0
+          && incoming().name.size() <= 100;
+        allow delete: if isOwner(userId);
+      }
+
+      // Subjects subcollection
+      match /subjects/{subjectId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(subjectId)
+          && incoming().id == subjectId
+          && incoming().userId == userId
+          && incoming().name is string
+          && incoming().name.size() > 0
+          && incoming().name.size() <= 150
+          && incoming().categoryId is string
+          && incoming().scheduleId is string;
+        allow update: if isOwner(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().name is string
+          && incoming().name.size() > 0
+          && incoming().name.size() <= 150;
+        allow delete: if isOwner(userId);
+      }
+
+      // Schedules subcollection
+      match /schedules/{scheduleId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(scheduleId)
+          && incoming().id == scheduleId
+          && incoming().userId == userId
+          && incoming().name is string
+          && incoming().name.size() > 0
+          && incoming().name.size() <= 100;
+        allow update: if isOwner(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().name is string
+          && incoming().name.size() > 0
+          && incoming().name.size() <= 100;
+        allow delete: if isOwner(userId);
+      }
+
+      // Logs subcollection
+      match /logs/{logId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && isValidId(logId)
+          && incoming().id == logId
+          && incoming().userId == userId
+          && incoming().subjectId is string
+          && incoming().rating is number;
+        allow update: if isOwner(userId)
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId;
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}
