@@ -440,7 +440,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
                 statusFilter === 'due' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Due Now
+              Due Today
             </button>
             <button
               onClick={() => setStatusFilter('mastered')}

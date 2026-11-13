@@ -29,6 +29,7 @@
 
 ### 2. Compact Subject List, Detail Modal & Multi-Category System
 - **Compact List View & Subject Details Popup**: Displays subjects in high-density rows showing topic title, category/schedule tags, stage, interval, next revision date, and direct **Log Due / Log Early** buttons. Clicking any row opens a **Subject Details** popup with syllabus notes, review metrics, Edit, Delete, and Log actions.
+- **Quick Search & Status Filtering**: Filter the subject list instantly by keyword search, multi-category pills, and status tabs (**All**, **Due Today**, **Mastered (>30d)**).
 - **Already Revising Stage Onboarding**: Both New and Edit Subject forms include an **Already Revising** toggle with a schedule-linked stage selector (`Stage 1`–`12`) that auto-fills the stage interval while keeping the next revision date editable.
 - **Multi-Category Assignment & Inline Quick-Add**: Assign one or multiple academic categories to any subject with primary category designation and quick-add category creation directly inside the subject form.
 - **12-Color Accent Palette**: Curated 12-color swatch picker (*Indigo, Emerald, Amber, Violet, Rose, Sky, Cyan, Teal, Orange, Fuchsia, Lime, Pink*) available for both **Categories** (create & edit) and **Subjects** (custom override or **Auto** inheritance from the primary category).
@@ -44,9 +45,10 @@
 - **Mobile Schedule Popup & Desktop Split View**: Selecting a schedule opens its editor, progression simulator, and assignment panel in a full-width mobile popup (`<768px`), while preserving the side-by-side layout on larger screens.
 - **Automatic Subject Synchronization**: Editing a schedule or reassigning a subject/category automatically recalculates assigned subjects' active stage intervals and next revision dates anchored to their latest review, and syncs updates to Firestore.
 
-### 4. Mobile-Safe Popups & Tab-Switch Containment
+### 4. Mobile-Safe Popups, Branding & Tab-Switch Containment
 - **Full-Width Mobile Bottom Sheets**: Portal-backed `ModalShell` renders modals as thumb-friendly full-width bottom sheets on phones (`<640px`) and centered dialogs on tablet/desktop (`>=640px`), featuring sticky headers/footers, internal scrolling, safe-area bottom padding, and two-line stacked controls on narrow screens.
 - **Auto-Close on Tab Switch**: Switching between application tabs (`Calendar`, `Subjects`, `Schedules`, `AI Stats`, `Vault`) automatically dismisses all active popups, drawers, filter dropdowns, and banners so returning to an earlier tab always shows a clean workspace.
+- **Lucidia Icon & Favicon**: Consistent Lucidia book emblem (`/favicon.ico`) across the top navigation bar, mobile navigation drawer, and browser tab icon.
 
 ### 5. AI Cognitive Learning Intelligence
 - **7-Day & 14-Day Longitudinal Charts**: Tracks daily revision volume (bars) and recall accuracy percentage (glowing trend line) filtered by one or more categories.
@@ -80,6 +82,7 @@
 ## Project Structure
 
 ```
+├── index.html                           # HTML entry point, SEO meta tags, & Lucidia favicon
 ├── server.ts                          # Express server + Vite dev middleware + Gemini API proxy
 ├── vite.config.ts                     # Vite React & Tailwind CSS v4 configuration
 ├── metadata.json                      # App metadata and capabilities
@@ -87,6 +90,8 @@
 ├── firebase-applet-config.json        # Firebase project & Firestore database config
 ├── firestore.rules                    # Firestore security rules
 ├── package.json                       # Dependencies and npm scripts
+├── public/
+│   └── favicon.ico                    # Lucidia book icon used in header, drawer, & browser tab
 └── src/
     ├── main.tsx                       # React 19 entry point
     ├── App.tsx                        # Root state, tab-switch cleanup, Firestore sync, & reconciliation
@@ -100,12 +105,12 @@
     │   ├── spacedRepetition.ts        # Spacing engine, simulator, & stage recalculation
     │   └── storage.ts                 # LocalStorage persistence with preset merging
     └── components/
-        ├── Header.tsx                 # Top navigation bar, token counter, & Google Sign-In
+        ├── Header.tsx                 # Top navigation bar, Lucidia icon, token counter, & Google Sign-In
         ├── MobileNavDrawer.tsx        # Slide-out mobile navigation drawer & quick actions
         ├── ModalShell.tsx             # Portal modal shell (mobile bottom sheet / desktop dialog)
         ├── MultiCategorySelect.tsx    # Multi-select category filter (mobile bottom sheet / popover)
         ├── RevisionCalendar.tsx       # Monthly calendar, Today's Focus banner, & agenda inspector
-        ├── SubjectCategoryManager.tsx # Compact subject list, detail modal, Already Revising, & CRUD
+        ├── SubjectCategoryManager.tsx # Compact subject list, Due Today filter, detail modal, & CRUD
         ├── CustomScheduleManager.tsx  # Schedule editor, mobile popup, & progression simulator
         ├── AIStatisticsDashboard.tsx  # 7D/14D analytics, decay curves, & Gemini cognitive audit
         ├── TrophyVault3D.tsx          # Interactive Three.js 3D trophy viewer & token shop
