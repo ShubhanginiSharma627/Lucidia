@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Subject, Category, RevisionSchedule } from '../types';
 import { formatInterval, formatDateToYYYYMMDD, simulateScheduleProgression } from '../services/spacedRepetition';
 import { subjectMatchesCategories } from './MultiCategorySelect';
@@ -24,6 +24,7 @@ interface SubjectCategoryManagerProps {
   onOpenLogSession: (subject: Subject) => void;
   isAddModalOpenInitially?: boolean;
   preselectedDateForNew?: string;
+  onAddModalDismissed?: () => void;
 }
 
 export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
@@ -37,6 +38,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
   onOpenLogSession,
   isAddModalOpenInitially = false,
   preselectedDateForNew,
+  onAddModalDismissed,
 }) => {
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [selectedSubjectCategoryIds, setSelectedSubjectCategoryIds] = useState<string[]>([]);
@@ -115,7 +117,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
     return true;
   });
 
-  const handleOpenNewSubject = () => {
+  const handleOpenNewSubject = (presetDate?: string) => {
     const defaultCatId = categories[0]?.id || '';
     setSubjectForm({
       id: `subj-${Date.now()}`,
@@ -130,17 +132,29 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
       intervalDays: 1,
       stability: 1.0,
       difficulty: 5.0,
-      nextDueDate: todayStr,
+      nextDueDate: presetDate || todayStr,
       status: 'scheduled',
       notes: '',
       createdAt: new Date().toISOString(),
     });
     setSelectedSubjectCategoryIds(defaultCatId ? [defaultCatId] : []);
     setIsAlreadyRevising(false);
-    setHasManuallyEditedDate(false);
+    setHasManuallyEditedDate(Boolean(presetDate));
     setNewCategoryInline('');
     setNewCategoryInlineColor('indigo');
     setIsSubjectModalOpen(true);
+  };
+
+  useEffect(() => {
+    if (isAddModalOpenInitially) {
+      handleOpenNewSubject(preselectedDateForNew);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAddModalOpenInitially, preselectedDateForNew]);
+
+  const closeSubjectModal = () => {
+    setIsSubjectModalOpen(false);
+    onAddModalDismissed?.();
   };
 
   const [newCategoryInline, setNewCategoryInline] = useState('');
@@ -268,7 +282,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
 
     onSaveSubject(saved);
     setNewCategoryInline('');
-    setIsSubjectModalOpen(false);
+    closeSubjectModal();
   };
 
   const handleSaveCategorySubmit = (e: React.FormEvent) => {
@@ -318,7 +332,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
           </button>
 
           <button
-            onClick={handleOpenNewSubject}
+            onClick={() => handleOpenNewSubject()}
             className="flex-1 sm:flex-none min-h-[42px] flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all whitespace-nowrap shrink-0 active:scale-[0.98]"
           >
             <Plus className="w-3.5 h-3.5 shrink-0" />
@@ -760,7 +774,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
       {/* Subject Create / Edit Modal */}
       <ModalShell
         isOpen={isSubjectModalOpen}
-        onClose={() => setIsSubjectModalOpen(false)}
+        onClose={closeSubjectModal}
         title={
           subjectForm.id?.startsWith('subj-') && subjects.some(s => s.id === subjectForm.id)
             ? 'Edit Subject'
@@ -1120,7 +1134,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
           <div className="shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-2.5 px-4 sm:px-5 py-3 bg-slate-900/95 border-t border-slate-800">
             <button
               type="button"
-              onClick={() => setIsSubjectModalOpen(false)}
+              onClick={closeSubjectModal}
               className="w-full sm:w-auto min-h-[40px] px-4 py-1.5 text-xs font-medium text-slate-400 hover:text-white transition-colors"
             >
               Cancel

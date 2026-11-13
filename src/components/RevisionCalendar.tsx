@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { User } from 'firebase/auth';
 import { Subject, Category, RevisionLog, RevisionSchedule } from '../types';
 import { formatDateToYYYYMMDD, formatInterval } from '../services/spacedRepetition';
 import { MultiCategorySelect, subjectMatchesCategories } from './MultiCategorySelect';
@@ -10,9 +11,9 @@ import {
   CheckCircle2,
   Clock,
   Plus,
-  BookOpen,
-  Filter,
   Check,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 
 interface RevisionCalendarProps {
@@ -20,6 +21,9 @@ interface RevisionCalendarProps {
   categories: Category[];
   logs: RevisionLog[];
   schedules: RevisionSchedule[];
+  user: User | null;
+  isFocusBannerDismissed?: boolean;
+  onDismissFocusBanner?: () => void;
   onOpenLogSession: (subject: Subject, targetDate?: string) => void;
   onOpenAddSubject: (preselectedDate?: string) => void;
 }
@@ -29,15 +33,44 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
   categories,
   logs,
   schedules,
+  user,
+  isFocusBannerDismissed = false,
+  onDismissFocusBanner,
   onOpenLogSession,
   onOpenAddSubject,
 }) => {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string>(() => formatDateToYYYYMMDD(new Date()));
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
-  const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
 
   const todayStr = formatDateToYYYYMMDD(new Date());
+
+  // Top 3 most overdue past-due subjects before today (shown only when signed in)
+  const mostOverdueData = useMemo(() => {
+    const todayMs = new Date(todayStr + 'T00:00:00').getTime();
+    const pastDue = subjects
+      .filter(s => s.nextDueDate < todayStr)
+      .sort((a, b) => {
+        const byDate = a.nextDueDate.localeCompare(b.nextDueDate);
+        if (byDate !== 0) return byDate;
+        if (a.revisionStage !== b.revisionStage) return a.revisionStage - b.revisionStage;
+        return a.name.localeCompare(b.name);
+      });
+
+    const topOverdue = pastDue.slice(0, 3).map(subject => {
+      const dueMs = new Date(subject.nextDueDate + 'T00:00:00').getTime();
+      const daysOverdue = Math.max(1, Math.round((todayMs - dueMs) / (1000 * 60 * 60 * 24)));
+      return { subject, daysOverdue };
+    });
+
+    return {
+      topOverdue,
+      totalOverdueCount: pastDue.length,
+    };
+  }, [subjects, todayStr]);
+
+  const showFocusBanner =
+    Boolean(user) && !isFocusBannerDismissed && mostOverdueData.topOverdue.length > 0;
 
   // Filter subjects by chosen multiple categories
   const filteredSubjects = useMemo(() => {
@@ -150,6 +183,90 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Today's Focus Banner (Logged-in users with past-due subjects) */}
+      {showFocusBanner && (
+        <section
+          aria-label="Today's Focus"
+          className="bg-slate-900/90 border border-amber-500/35 rounded-2xl p-3.5 sm:p-4 shadow-lg space-y-3 min-w-0 max-w-full"
+        >
+          <div className="flex items-start justify-between gap-3 min-w-0">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <h2 className="text-sm font-bold text-white tracking-tight">
+                  Today&apos;s Focus
+                </h2>
+                <span aria-hidden="true" className="text-slate-600 text-xs">·</span>
+                <span className="text-xs font-mono tabular-nums text-amber-300/90">
+                  {mostOverdueData.totalOverdueCount > 3
+                    ? `Top 3 of ${mostOverdueData.totalOverdueCount} overdue`
+                    : `${mostOverdueData.topOverdue.length} overdue ${
+                        mostOverdueData.topOverdue.length === 1 ? 'subject' : 'subjects'
+                      }`}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Prioritize your oldest missed revisions first—tap any topic to log a catch-up session.
+              </p>
+            </div>
+
+            {onDismissFocusBanner && (
+              <button
+                type="button"
+                onClick={onDismissFocusBanner}
+                aria-label="Dismiss Today's Focus banner"
+                className="min-w-[34px] min-h-[34px] flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 min-w-0">
+            {mostOverdueData.topOverdue.map(({ subject, daysOverdue }) => {
+              const subjectAccent = getSubjectColor(subject, categories);
+              const primaryCategory = getSubjectCategories(subject, categories)[0];
+
+              return (
+                <button
+                  key={subject.id}
+                  type="button"
+                  onClick={() => onOpenLogSession(subject, todayStr)}
+                  className="text-left p-3 bg-slate-950/75 hover:bg-slate-950 border border-slate-800 hover:border-amber-500/45 rounded-xl transition-all flex items-center justify-between gap-2.5 min-w-0 active:scale-[0.99]"
+                >
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${getDotColorClass(subjectAccent)}`} />
+                      <span className="text-xs sm:text-sm font-semibold text-slate-100 truncate">
+                        {subject.name}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-4 text-[11px] font-mono tabular-nums text-slate-400">
+                      <span className="text-amber-400 font-semibold">
+                        {daysOverdue}d overdue
+                      </span>
+                      <span aria-hidden="true" className="text-slate-600">·</span>
+                      <span>Stage {subject.revisionStage}</span>
+                      {primaryCategory && (
+                        <>
+                          <span aria-hidden="true" className="text-slate-600">·</span>
+                          <span className="truncate max-w-[120px]">{primaryCategory.name}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <span className="text-xs font-semibold text-indigo-300 shrink-0 whitespace-nowrap">
+                    Log
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* Zero subjects banner */}
       {subjects.length === 0 && (

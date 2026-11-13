@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Subject, Rating, RevisionSchedule } from '../types';
 import { calculateNextSubjectRevision, formatInterval, formatDateToYYYYMMDD } from '../services/spacedRepetition';
 import { calculateSessionTokens } from '../services/gamification';
@@ -34,6 +34,15 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
   const [durationMinutes, setDurationMinutes] = useState(25);
   const [notes, setNotes] = useState('');
   const [revisedDate, setRevisedDate] = useState(() => targetDate || formatDateToYYYYMMDD(new Date()));
+
+  useEffect(() => {
+    if (isOpen) {
+      setRating(3);
+      setDurationMinutes(25);
+      setNotes('');
+      setRevisedDate(targetDate || formatDateToYYYYMMDD(new Date()));
+    }
+  }, [isOpen, subject?.id, targetDate]);
 
   if (!isOpen || !subject) return null;
 

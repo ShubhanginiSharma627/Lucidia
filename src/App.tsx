@@ -83,6 +83,18 @@ export default function App() {
   const [preselectedDateForNewSubject, setPreselectedDateForNewSubject] = useState<string | undefined>(undefined);
   const [isAddSubjectModalOpen, setIsAddSubjectModalOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [dismissedFocusUid, setDismissedFocusUid] = useState<string | null>(null);
+
+  // Close all open popups, drawers, and cross-tab modal triggers when switching tabs
+  const handleTabChange = useCallback((nextTab: NavTab) => {
+    setSessionModalSubject(null);
+    setSessionModalTargetDate(undefined);
+    setIsMobileNavOpen(false);
+    setUnlockedCelebration(null);
+    setIsAddSubjectModalOpen(false);
+    setPreselectedDateForNewSubject(undefined);
+    setActiveTab(nextTab);
+  }, []);
 
   // Update gamification profile helper
   const handleUpdateGamificationProfile = useCallback((updated: UserGamificationProfile) => {
@@ -94,6 +106,9 @@ export default function App() {
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, currentUser => {
       setUser(currentUser);
+      if (!currentUser) {
+        setDismissedFocusUid(null);
+      }
       if (currentUser) {
         // Subscribe to user Firestore data
         const unsubscribeFirestore = subscribeToUserUserData(currentUser.uid, {
@@ -552,9 +567,9 @@ export default function App() {
         targetRetention,
       };
       handleSaveSchedule(updatedSchedule);
-      setActiveTab('schedules');
+      handleTabChange('schedules');
     },
-    [handleSaveSchedule]
+    [handleSaveSchedule, handleTabChange]
   );
 
   // AI Cognitive Audit
@@ -597,7 +612,7 @@ export default function App() {
       {/* Top Bar Navigation with Google Sign-In */}
       <Header
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         dueSubjectsCount={dueSubjectsCount}
         user={user}
         onSignInWithGoogle={signInWithGoogle}
@@ -636,8 +651,7 @@ export default function App() {
           <div className="mt-3 flex items-center justify-end gap-2">
             <button
               onClick={() => {
-                setActiveTab('vault');
-                setUnlockedCelebration(null);
+                handleTabChange('vault');
               }}
               className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-colors flex items-center gap-1 shadow-sm"
             >
@@ -656,11 +670,22 @@ export default function App() {
             categories={categories}
             logs={logs}
             schedules={schedules}
+            user={user}
+            isFocusBannerDismissed={Boolean(user && dismissedFocusUid === user.uid)}
+            onDismissFocusBanner={() => {
+              if (user) {
+                setDismissedFocusUid(user.uid);
+              }
+            }}
             onOpenLogSession={(subject, targetDate) => {
               setSessionModalSubject(subject);
               setSessionModalTargetDate(targetDate);
             }}
             onOpenAddSubject={preselectedDate => {
+              setSessionModalSubject(null);
+              setSessionModalTargetDate(undefined);
+              setIsMobileNavOpen(false);
+              setUnlockedCelebration(null);
               setPreselectedDateForNewSubject(preselectedDate);
               setIsAddSubjectModalOpen(true);
               setActiveTab('subjects');
@@ -683,6 +708,10 @@ export default function App() {
             }}
             isAddModalOpenInitially={isAddSubjectModalOpen}
             preselectedDateForNew={preselectedDateForNewSubject}
+            onAddModalDismissed={() => {
+              setIsAddSubjectModalOpen(false);
+              setPreselectedDateForNewSubject(undefined);
+            }}
           />
         )}
 
@@ -725,7 +754,7 @@ export default function App() {
         isOpen={isMobileNavOpen}
         onClose={() => setIsMobileNavOpen(false)}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         dueSubjectsCount={dueSubjectsCount}
         user={user}
         onSignInWithGoogle={signInWithGoogle}
@@ -737,10 +766,14 @@ export default function App() {
             setSessionModalSubject(firstDue);
             setSessionModalTargetDate(todayStr);
           } else {
-            setActiveTab('calendar');
+            handleTabChange('calendar');
           }
         }}
         onQuickAddSubject={() => {
+          setSessionModalSubject(null);
+          setSessionModalTargetDate(undefined);
+          setIsMobileNavOpen(false);
+          setUnlockedCelebration(null);
           setPreselectedDateForNewSubject(todayStr);
           setIsAddSubjectModalOpen(true);
           setActiveTab('subjects');
@@ -753,7 +786,10 @@ export default function App() {
         schedules={schedules}
         targetDate={sessionModalTargetDate}
         isOpen={Boolean(sessionModalSubject)}
-        onClose={() => setSessionModalSubject(null)}
+        onClose={() => {
+          setSessionModalSubject(null);
+          setSessionModalTargetDate(undefined);
+        }}
         onSubmitLog={handleSubmitSessionLog}
         currentStreak={gamificationProfile.currentStreak}
       />
