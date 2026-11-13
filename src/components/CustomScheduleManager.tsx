@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { RevisionSchedule, Category, Subject } from '../types';
 import { simulateScheduleProgression } from '../services/spacedRepetition';
 import { getSubjectCategoryIds } from '../services/colors';
-import { Sliders, Plus, Check, Calendar, Layers, Trash2 } from 'lucide-react';
+import { Sliders, Plus, Check, Calendar, Layers, Trash2, ChevronRight } from 'lucide-react';
+import { ModalShell } from './ModalShell';
 
 interface CustomScheduleManagerProps {
   schedules: RevisionSchedule[];
@@ -27,6 +28,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
 }) => {
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>(schedules[0]?.id || 'lucidia-adaptive');
   const [isEditing, setIsEditing] = useState(false);
+  const [isMobileDetailOpen, setIsMobileDetailOpen] = useState(false);
 
   const currentSchedule = schedules.find(s => s.id === selectedScheduleId) || schedules[0];
   const [formData, setFormData] = useState<RevisionSchedule>(currentSchedule);
@@ -49,6 +51,22 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
     }
   }, [schedules, selectedScheduleId, isEditing]);
 
+  // Auto-close mobile modal if viewport resizes to tablet/desktop (>= 768px)
+  useEffect(() => {
+    if (!isMobileDetailOpen || typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      if (e.matches) {
+        setIsMobileDetailOpen(false);
+      }
+    };
+    if (mq.matches) {
+      setIsMobileDetailOpen(false);
+    }
+    mq.addEventListener('change', handleChange);
+    return () => mq.removeEventListener('change', handleChange);
+  }, [isMobileDetailOpen]);
+
   const handleSelectSchedule = (id: string) => {
     setSelectedScheduleId(id);
     const target = schedules.find(s => s.id === id);
@@ -56,6 +74,9 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
       setFormData(target);
       setLadderInputText((target.customStepsLadder || DEFAULT_LADDER).join(', '));
       setIsEditing(false);
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        setIsMobileDetailOpen(true);
+      }
     }
   };
 
@@ -84,6 +105,9 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
     setLadderInputText((newSchedule.customStepsLadder || DEFAULT_LADDER).join(', '));
     setSelectedScheduleId(newId);
     setIsEditing(true);
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsMobileDetailOpen(true);
+    }
   };
 
   const handleSave = () => {
@@ -108,148 +132,84 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
 
   const assignedSubjects = subjects.filter(s => s.scheduleId === activeScheduleToSimulate.id);
 
-  return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5 sm:space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-1 flex items-center gap-2.5">
-            <Sliders className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400 shrink-0" />
-            <span>Custom Revision Schedules</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400">
-            Configure spaced repetition curves, interval multipliers, and assign them directly to categories and subjects.
-          </p>
-        </div>
-
-        <button
-          onClick={handleCreateNew}
-          className="min-h-[42px] flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all whitespace-nowrap shrink-0 self-stretch sm:self-start md:self-auto active:scale-[0.98]"
-        >
-          <Plus className="w-4 h-4 shrink-0" />
-          <span>New Custom Schedule</span>
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-5 sm:gap-6 lg:gap-8">
-        {/* Left Column: Schedule Selection List */}
-        <div className="md:col-span-5 lg:col-span-4 space-y-3">
-          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-            Available Schedules ({schedules.length})
+  const renderScheduleDetailContent = () => (
+    <div className="space-y-4 sm:space-y-6 min-w-0 max-w-full overflow-x-hidden">
+      {/* Schedule Configuration Card */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 sm:p-6 shadow-xl space-y-4 sm:space-y-6 min-w-0 max-w-full overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3.5 sm:pb-4 border-b border-slate-800 min-w-0">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base sm:text-lg font-bold text-slate-100 flex items-center gap-2 min-w-0">
+              <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400 shrink-0" />
+              <span className="break-words">{isEditing ? 'Editing Schedule Parameters' : activeScheduleToSimulate.name}</span>
+            </h2>
+            <div className="text-xs text-slate-400 mt-1">
+              Algorithm: <span className="font-mono text-slate-300">{activeScheduleToSimulate.algorithm}</span>
+            </div>
           </div>
 
-          {schedules.map(schedule => {
-            const isSelected = schedule.id === selectedScheduleId;
-            const subjectCount = subjects.filter(s => s.scheduleId === schedule.id).length;
-
-            return (
-              <div
-                key={schedule.id}
-                onClick={() => handleSelectSchedule(schedule.id)}
-                className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                  isSelected
-                    ? 'bg-indigo-950/30 border-indigo-500/50 shadow-md shadow-indigo-950/40'
-                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
-                }`}
+          <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto sm:shrink-0">
+            {!isEditing ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setFormData(currentSchedule);
+                  setLadderInputText((currentSchedule.customStepsLadder || DEFAULT_LADDER).join(', '));
+                  setIsEditing(true);
+                }}
+                className="min-h-[38px] px-3.5 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors whitespace-nowrap shrink-0"
               >
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <h3 className={`text-sm font-semibold ${isSelected ? 'text-indigo-300' : 'text-slate-200'}`}>
-                    {schedule.name}
-                  </h3>
-                  {schedule.isPreset && (
-                    <span className="text-[10px] text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded font-mono">
-                      Preset
-                    </span>
-                  )}
-                </div>
+                Customize Parameters
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors whitespace-nowrap shrink-0"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="min-h-[38px] px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition-all whitespace-nowrap shrink-0"
+                >
+                  Save Configuration
+                </button>
+              </>
+            )}
 
-                <p className="text-xs text-slate-400 line-clamp-2 mb-3">
-                  {schedule.description}
-                </p>
-
-                <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                  <span>Mult: {schedule.intervalMultiplier.toFixed(1)}x</span>
-                  <span>·</span>
-                  <span>Target: {Math.round(schedule.targetRetention * 100)}%</span>
-                  <span>·</span>
-                  <span>{subjectCount} {subjectCount === 1 ? 'subject' : 'subjects'}</span>
-                </div>
-              </div>
-            );
-          })}
+            {!activeScheduleToSimulate.isPreset && !isEditing && (
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteSchedule(activeScheduleToSimulate.id);
+                  setIsMobileDetailOpen(false);
+                }}
+                title="Delete schedule"
+                className="min-w-[38px] min-h-[38px] flex items-center justify-center p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-colors shrink-0"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Right Column: Schedule Editor & Live Simulation */}
-        <div className="md:col-span-7 lg:col-span-8 space-y-6">
-          {/* Schedule Configuration Card */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
-            <div className="flex items-center justify-between gap-4 pb-4 border-b border-slate-800">
-              <div>
-                <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                  <Sliders className="w-5 h-5 text-indigo-400" />
-                  <span>{isEditing ? 'Editing Schedule Parameters' : activeScheduleToSimulate.name}</span>
-                </h2>
-                <div className="text-xs text-slate-400 mt-1">
-                  Algorithm: <span className="font-mono text-slate-300">{activeScheduleToSimulate.algorithm}</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {!isEditing ? (
-                  <button
-                    onClick={() => {
-                      setFormData(currentSchedule);
-                      setLadderInputText((currentSchedule.customStepsLadder || DEFAULT_LADDER).join(', '));
-                      setIsEditing(true);
-                    }}
-                    className="px-3.5 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
-                  >
-                    Customize Parameters
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => setIsEditing(false)}
-                      className="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSave}
-                      className="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition-all"
-                    >
-                      Save Configuration
-                    </button>
-                  </>
-                )}
-
-                {!activeScheduleToSimulate.isPreset && !isEditing && (
-                  <button
-                    onClick={() => onDeleteSchedule(activeScheduleToSimulate.id)}
-                    title="Delete schedule"
-                    className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Editing Form vs Read-only parameters */}
-            {isEditing ? (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
+        {/* Editing Form vs Read-only parameters */}
+        {isEditing ? (
+          <div className="space-y-5 min-w-0">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4 min-w-0">
+                  <div className="min-w-0">
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5">Schedule Name</label>
                     <input
                       type="text"
                       value={formData.name}
                       onChange={e => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                      className="w-full min-w-0 max-w-full box-border px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5">Algorithm Model</label>
                     <select
                       value={formData.algorithm}
@@ -267,7 +227,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                               : DEFAULT_LADDER,
                         });
                       }}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                      className="w-full min-w-0 max-w-full box-border px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
                     >
                       <option value="sm2_custom">SM-2 Adaptive (Ease Factor Multiplier)</option>
                       <option value="fsrs_custom">FSRS Cognitive Decay Modeling</option>
@@ -277,19 +237,19 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                   </div>
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">Description & Purpose</label>
                   <input
                     type="text"
                     value={formData.description}
                     onChange={e => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                    className="w-full min-w-0 max-w-full box-border px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
 
                 {/* Mathematical Sliders Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
-                  <div className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-2 min-w-0">
+                  <div className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl min-w-0">
                     <div className="flex justify-between items-center text-xs mb-1">
                       <span className="font-semibold text-slate-300">Interval Multiplier</span>
                       <span className="font-mono text-indigo-400">{formData.intervalMultiplier.toFixed(2)}x</span>
@@ -308,7 +268,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                     </div>
                   </div>
 
-                  <div className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl">
+                  <div className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl min-w-0">
                     <div className="flex justify-between items-center text-xs mb-1">
                       <span className="font-semibold text-slate-300">Target Retention Rate</span>
                       <span className="font-mono text-emerald-400">{Math.round(formData.targetRetention * 100)}%</span>
@@ -327,7 +287,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                     </div>
                   </div>
 
-                  <div className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl">
+                  <div className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl min-w-0">
                     <div className="flex justify-between items-center text-xs mb-1">
                       <span className="font-semibold text-slate-300">Easy Rating Bonus</span>
                       <span className="font-mono text-indigo-300">{formData.easyBonus.toFixed(2)}x</span>
@@ -346,7 +306,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                     </div>
                   </div>
 
-                  <div className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl">
+                  <div className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl min-w-0">
                     <div className="flex justify-between items-center text-xs mb-1">
                       <span className="font-semibold text-slate-300">Lapse Memory Retention %</span>
                       <span className="font-mono text-amber-400">{formData.lapseResetPercentage}%</span>
@@ -367,9 +327,9 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                 </div>
 
                 {/* Custom Step Ladder Array */}
-                <div className="p-3.5 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
+                <div className="p-3.5 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2.5 min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+                    <div className="min-w-0">
                       <label className="block text-xs font-semibold text-slate-200">
                         Custom Step Interval Sequence (Days)
                       </label>
@@ -386,7 +346,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                           useCustomSteps: !(formData.useCustomSteps || formData.algorithm === 'fixed_intervals'),
                         })
                       }
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors flex items-center gap-1.5 ${
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors flex items-center gap-1.5 shrink-0 ${
                         formData.useCustomSteps || formData.algorithm === 'fixed_intervals'
                           ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
                           : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
@@ -433,7 +393,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                       }
                     }}
                     placeholder="e.g. 1, 3, 7, 14, 30, 60, 120"
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full min-w-0 max-w-full box-border px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
                   />
 
                   {/* Live Parsed Steps Preview */}
@@ -479,11 +439,11 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
           </div>
 
           {/* Live Schedule Progression Simulator Visualizer */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <div>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 sm:p-6 shadow-xl min-w-0 max-w-full overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4 min-w-0">
+              <div className="min-w-0">
                 <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-emerald-400" />
+                  <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>Subject Interval Progression Simulation</span>
                 </h3>
                 <div className="text-xs text-slate-400">
@@ -491,11 +451,11 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
                 {(activeScheduleToSimulate.useCustomSteps || activeScheduleToSimulate.algorithm === 'fixed_intervals') &&
                   activeScheduleToSimulate.customStepsLadder &&
                   activeScheduleToSimulate.customStepsLadder.length > 0 && (
-                    <div className="text-[11px] font-mono text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-2.5 py-1 rounded-md">
+                    <div className="text-[11px] font-mono text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-2.5 py-1 rounded-md max-w-full truncate">
                       Custom Steps ({activeScheduleToSimulate.customStepsLadder.slice(0, 5).join(', ')}
                       {activeScheduleToSimulate.customStepsLadder.length > 5 ? ', …' : ''})
                     </div>
@@ -506,25 +466,25 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
               </div>
             </div>
 
-            <div className="space-y-2.5 mb-4">
+            <div className="space-y-2.5 mb-2 min-w-0">
               {simulationSteps.map(step => {
                 const maxIntervalInSim = simulationSteps[simulationSteps.length - 1]?.intervalDays || 100;
                 const percentage = Math.min(100, Math.max(6, (step.intervalDays / maxIntervalInSim) * 100));
 
                 return (
-                  <div key={step.step} className="flex items-center gap-3 text-xs">
-                    <span className="w-16 font-mono text-slate-400 shrink-0">Stage #{step.step}</span>
-                    <div className="flex-1 h-6 bg-slate-950 rounded-md overflow-hidden relative border border-slate-800/80">
+                  <div key={step.step} className="flex items-center gap-2 sm:gap-3 text-xs min-w-0">
+                    <span className="w-14 sm:w-16 font-mono text-slate-400 shrink-0 tabular-nums">Stage #{step.step}</span>
+                    <div className="flex-1 min-w-0 h-6 bg-slate-950 rounded-md overflow-hidden relative border border-slate-800/80">
                       <div
                         className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 rounded-md transition-all duration-300 flex items-center justify-end px-2"
-                        style={{ width: `${percentage}%`, minWidth: '2.75rem' }}
+                        style={{ width: `${percentage}%`, minWidth: '2.25rem' }}
                       >
                         <span className="font-mono text-[11px] text-white font-semibold tabular-nums drop-shadow whitespace-nowrap">
                           {step.formatted}
                         </span>
                       </div>
                     </div>
-                    <span className="w-16 text-right font-mono text-slate-400 text-[11px] tabular-nums shrink-0">
+                    <span className="w-10 sm:w-16 text-right font-mono text-slate-400 text-[11px] tabular-nums shrink-0">
                       {step.intervalDays}d
                     </span>
                   </div>
@@ -534,11 +494,11 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
           </div>
 
           {/* Assigned Categories & Subjects */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-indigo-400" />
-                <span>Assigned Categories & Subjects ({assignedSubjects.length})</span>
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 sm:p-6 shadow-xl space-y-4 min-w-0 max-w-full overflow-hidden">
+            <div className="flex items-center justify-between min-w-0">
+              <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2 min-w-0">
+                <Layers className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span className="truncate">Assigned Categories &amp; Subjects ({assignedSubjects.length})</span>
               </h3>
             </div>
             <p className="text-xs text-slate-400">
@@ -546,9 +506,9 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
             </p>
 
             {/* Category Bulk Assignment */}
-            <div className="space-y-2 pt-1">
+            <div className="space-y-2 pt-1 min-w-0">
               <div className="text-xs font-semibold text-slate-300">Assign to Entire Category:</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
                 {categories.map(cat => {
                   const subsInCat = subjects.filter(s => getSubjectCategoryIds(s).includes(cat.id));
                   const isAllAssigned = subsInCat.length > 0 && subsInCat.every(s => s.scheduleId === activeScheduleToSimulate.id);
@@ -556,16 +516,17 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                   return (
                     <div
                       key={cat.id}
-                      className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl flex items-center justify-between gap-2"
+                      className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl flex items-center justify-between gap-2 min-w-0"
                     >
-                      <div className="truncate">
+                      <div className="min-w-0 flex-1">
                         <div className="text-xs font-semibold text-slate-200 truncate">{cat.name}</div>
                         <div className="text-[10px] text-slate-500 font-mono">{subsInCat.length} subjects</div>
                       </div>
 
                       <button
+                        type="button"
                         onClick={() => onAssignScheduleToCategory(cat.id, activeScheduleToSimulate.id)}
-                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors shrink-0 ${
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors shrink-0 whitespace-nowrap ${
                           isAllAssigned
                             ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
                             : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
@@ -580,18 +541,18 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
             </div>
 
             {/* Subject Direct Assignment */}
-            <div className="space-y-2 pt-3 border-t border-slate-800">
+            <div className="space-y-2 pt-3 border-t border-slate-800 min-w-0">
               <div className="text-xs font-semibold text-slate-300">Individual Subject Overrides:</div>
-              <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[220px] overflow-y-auto overflow-x-hidden pr-1">
                 {subjects.map(subject => {
                   const isAssigned = subject.scheduleId === activeScheduleToSimulate.id;
 
                   return (
                     <div
                       key={subject.id}
-                      className="flex items-center justify-between p-2.5 bg-slate-950/60 border border-slate-800 rounded-xl"
+                      className="flex items-center justify-between gap-2 p-2.5 bg-slate-950/60 border border-slate-800 rounded-xl min-w-0"
                     >
-                      <div className="truncate mr-2">
+                      <div className="min-w-0 flex-1">
                         <div className="text-xs font-medium text-slate-200 truncate">{subject.name}</div>
                         <div className="text-[10px] text-slate-500 font-mono truncate">
                           {subject.categoryNames && subject.categoryNames.length > 0
@@ -602,8 +563,9 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                       </div>
 
                       <button
+                        type="button"
                         onClick={() => onAssignScheduleToSubject(subject.id, activeScheduleToSimulate.id)}
-                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors shrink-0 flex items-center gap-1 ${
+                        className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors shrink-0 flex items-center gap-1 whitespace-nowrap ${
                           isAssigned
                             ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
                             : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
@@ -624,8 +586,119 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
               </div>
             </div>
           </div>
+    </div>
+  );
+
+  return (
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5 sm:space-y-8">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-1 flex items-center gap-2.5">
+            <Sliders className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400 shrink-0" />
+            <span>Custom Revision Schedules</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400">
+            Configure spaced repetition curves, interval multipliers, and assign them directly to categories and subjects.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleCreateNew}
+          className="min-h-[42px] flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all whitespace-nowrap shrink-0 self-stretch sm:self-start md:self-auto active:scale-[0.98]"
+        >
+          <Plus className="w-4 h-4 shrink-0" />
+          <span>New Custom Schedule</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-5 sm:gap-6 lg:gap-8">
+        {/* Left Column: Schedule Selection List */}
+        <div className="md:col-span-5 lg:col-span-4 space-y-3">
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+            Available Schedules ({schedules.length})
+          </div>
+
+          {schedules.map(schedule => {
+            const isSelected = schedule.id === selectedScheduleId;
+            const subjectCount = subjects.filter(s => s.scheduleId === schedule.id).length;
+
+            return (
+              <div
+                key={schedule.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => handleSelectSchedule(schedule.id)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleSelectSchedule(schedule.id);
+                  }
+                }}
+                className={`p-4 rounded-xl border cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                  isSelected
+                    ? 'bg-indigo-950/30 border-indigo-500/50 shadow-md shadow-indigo-950/40'
+                    : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <h3 className={`text-sm font-semibold truncate ${isSelected ? 'text-indigo-300' : 'text-slate-200'}`}>
+                    {schedule.name}
+                  </h3>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {schedule.isPreset && (
+                      <span className="text-[10px] text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded font-mono">
+                        Preset
+                      </span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-slate-500 md:hidden" />
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-400 line-clamp-2 mb-3">
+                  {schedule.description}
+                </p>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono tabular-nums">
+                  <span>Mult: {schedule.intervalMultiplier.toFixed(1)}x</span>
+                  <span>·</span>
+                  <span>Target: {Math.round(schedule.targetRetention * 100)}%</span>
+                  <span>·</span>
+                  <span>{subjectCount} {subjectCount === 1 ? 'subject' : 'subjects'}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right Column (Tablet & Desktop): Schedule Editor & Live Simulation */}
+        <div className="hidden md:block md:col-span-7 lg:col-span-8">
+          {renderScheduleDetailContent()}
         </div>
       </div>
+
+      {/* Mobile Popup Modal (< 768px): Schedule Detail, Editor, Simulator & Assignments */}
+      <ModalShell
+        isOpen={isMobileDetailOpen}
+        onClose={() => {
+          setIsMobileDetailOpen(false);
+          setIsEditing(false);
+        }}
+        maxWidthClass="max-w-2xl"
+        hideOnDesktop={true}
+        closeAriaLabel="Close schedule details"
+        subtitle={
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-indigo-400">
+            {isEditing ? 'Edit Revision Schedule' : 'Revision Schedule'}
+          </div>
+        }
+        title={activeScheduleToSimulate.name}
+      >
+        <div className="flex-1 min-h-0 min-w-0 max-w-full overflow-y-auto overflow-x-hidden p-2.5 sm:p-4 bg-slate-950/60">
+          {renderScheduleDetailContent()}
+        </div>
+      </ModalShell>
     </div>
   );
 };

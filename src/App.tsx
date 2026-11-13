@@ -192,7 +192,7 @@ export default function App() {
       }
 
       const recalculated = recalculateSubjectForSchedule(subj, sched, logs);
-      if (recalculated.intervalDays !== subj.intervalDays || recalculated.nextDueDate !== subj.nextDueDate) {
+      if (recalculated.intervalDays !== subj.intervalDays) {
         updatedList.push(recalculated);
         changedSubjects.push(recalculated);
       } else {
@@ -315,18 +315,14 @@ export default function App() {
       const prevSubject = currentSubjects.find(s => s.id === subject.id);
       if (
         prevSubject &&
+        prevSubject.scheduleId !== subject.scheduleId &&
         prevSubject.nextDueDate === subject.nextDueDate &&
+        prevSubject.revisionStage === subject.revisionStage &&
         subject.revisionStage >= 1
       ) {
         const targetSchedule = currentSchedules.find(sc => sc.id === subject.scheduleId);
         if (targetSchedule) {
-          const usesCustom = Boolean(
-            (targetSchedule.useCustomSteps || targetSchedule.algorithm === 'fixed_intervals') &&
-              targetSchedule.customStepsLadder?.length
-          );
-          if (prevSubject.scheduleId !== subject.scheduleId || usesCustom) {
-            subjectToSave = recalculateSubjectForSchedule(subject, targetSchedule, currentLogs);
-          }
+          subjectToSave = recalculateSubjectForSchedule(subject, targetSchedule, currentLogs);
         }
       }
 
@@ -612,17 +608,17 @@ export default function App() {
 
       {/* Achievement Unlocked Floating Celebration Banner */}
       {unlockedCelebration && (
-        <div className="fixed top-16 right-4 sm:right-6 z-50 max-w-sm w-full bg-slate-900/95 backdrop-blur-md border border-amber-500/60 rounded-2xl p-4 shadow-2xl animate-bounce-subtle ring-1 ring-amber-500/40">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3">
+        <div className="fixed top-16 inset-x-3 sm:inset-x-auto sm:right-6 z-50 sm:max-w-sm sm:w-full bg-slate-900/95 backdrop-blur-md border border-amber-500/60 rounded-2xl p-4 shadow-2xl animate-bounce-subtle ring-1 ring-amber-500/40">
+          <div className="flex items-start justify-between gap-3 min-w-0">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center shrink-0">
                 <Trophy className="w-5 h-5 text-amber-400" />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 font-mono">
                   Achievement Unlocked!
                 </span>
-                <h4 className="text-sm font-bold text-white leading-tight">
+                <h4 className="text-sm font-bold text-white leading-tight break-words">
                   {unlockedCelebration.title}
                 </h4>
                 <p className="text-xs text-slate-300 mt-0.5">
@@ -632,7 +628,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setUnlockedCelebration(null)}
-              className="text-slate-400 hover:text-white p-1"
+              className="text-slate-400 hover:text-white p-1 shrink-0"
             >
               <X className="w-4 h-4" />
             </button>

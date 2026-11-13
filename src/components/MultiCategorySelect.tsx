@@ -164,112 +164,133 @@ export const MultiCategorySelect: React.FC<MultiCategorySelectProps> = ({
         />
       </button>
 
-      {/* Dropdown Menu Popover */}
+      {/* Dropdown Menu Popover (Bottom sheet on mobile, anchored popover on sm+) */}
       {isOpen && (
-        <div
-          className={`absolute top-full mt-1.5 z-50 w-72 max-w-[90vw] bg-slate-900/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-2.5 space-y-2 animate-fade-in ${
-            align === 'right' ? 'right-0' : 'left-0'
-          }`}
-        >
-          {/* Header & Quick Action Toggles */}
-          <div className="flex items-center justify-between px-1.5 pb-2 border-b border-slate-800 text-xs">
-            <span className="font-semibold text-slate-300 flex items-center gap-1.5">
-              <span>Filter Categories</span>
-              {!isAllSelected && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 font-mono font-bold">
-                  {selectedCategoryIds.length}
-                </span>
-              )}
-            </span>
+        <>
+          <div
+            onClick={() => setIsOpen(false)}
+            className="sm:hidden fixed inset-0 z-[74] bg-black/60 backdrop-blur-[1px]"
+            aria-hidden="true"
+          />
+          <div
+            className={`fixed inset-x-0 bottom-0 z-[75] w-full max-w-full max-h-[78dvh] flex flex-col rounded-t-2xl sm:rounded-2xl sm:inset-x-auto sm:bottom-auto sm:absolute sm:top-full sm:mt-1.5 sm:z-50 sm:w-72 sm:max-w-[90vw] bg-slate-900/95 backdrop-blur-xl border-t sm:border border-slate-700/80 shadow-2xl p-3 sm:p-2.5 space-y-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-2.5 animate-fade-in ${
+              align === 'right' ? 'sm:right-0' : 'sm:left-0'
+            }`}
+          >
+            {/* Mobile grab handle */}
+            <div className="sm:hidden flex justify-center pb-1 shrink-0">
+              <span className="w-9 h-1 rounded-full bg-slate-700/80" aria-hidden="true" />
+            </div>
 
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={handleSelectAll}
-                className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
-                  isAllSelected
-                    ? 'text-indigo-400 bg-indigo-500/10'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                All
-              </button>
-              {!isAllSelected && (
+            {/* Header & Quick Action Toggles */}
+            <div className="shrink-0 flex items-center justify-between px-1.5 pb-2 border-b border-slate-800 text-xs">
+              <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                <span>Filter Categories</span>
+                {!isAllSelected && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 font-mono font-bold">
+                    {selectedCategoryIds.length}
+                  </span>
+                )}
+              </span>
+
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={handleClear}
-                  className="px-2 py-0.5 rounded text-[11px] text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                  onClick={handleSelectAll}
+                  className={`px-2 py-0.5 rounded text-[11px] font-semibold transition-colors ${
+                    isAllSelected
+                      ? 'text-indigo-400 bg-indigo-500/10'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
                 >
-                  Reset
+                  All
                 </button>
-              )}
-            </div>
-          </div>
-
-          {/* Categories List with Multi-Choice Checkboxes */}
-          <div className="max-h-60 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
-            {categories.length === 0 ? (
-              <div className="text-center py-4 text-xs text-slate-500">
-                No categories created yet
-              </div>
-            ) : (
-              categories.map(cat => {
-                const isChecked = isAllSelected || selectedCategoryIds.includes(cat.id);
-                const count = categoryCounts[cat.id] || 0;
-
-                return (
+                {!isAllSelected && (
                   <button
-                    key={cat.id}
                     type="button"
-                    onClick={() => handleToggleCategory(cat.id)}
-                    className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs transition-colors ${
-                      isChecked
-                        ? 'bg-indigo-950/40 text-slate-100 hover:bg-indigo-900/40'
-                        : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                    }`}
+                    onClick={handleClear}
+                    className="px-2 py-0.5 rounded text-[11px] text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
                   >
-                    <div className="flex items-center gap-2.5 truncate">
-                      <div
-                        className={`w-4 h-4 rounded flex items-center justify-center border transition-colors shrink-0 ${
-                          isChecked
-                            ? 'bg-indigo-600 border-indigo-500 text-white'
-                            : 'border-slate-700 bg-slate-950'
-                        }`}
-                      >
-                        {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Categories List with Multi-Choice Checkboxes */}
+            <div className="flex-1 min-h-0 max-h-[48dvh] sm:max-h-60 overflow-y-auto overflow-x-hidden space-y-1 pr-1 scrollbar-thin">
+              {categories.length === 0 ? (
+                <div className="text-center py-4 text-xs text-slate-500">
+                  No categories created yet
+                </div>
+              ) : (
+                categories.map(cat => {
+                  const isChecked = isAllSelected || selectedCategoryIds.includes(cat.id);
+                  const count = categoryCounts[cat.id] || 0;
+
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => handleToggleCategory(cat.id)}
+                      className={`w-full min-w-0 flex items-center justify-between p-2 rounded-xl text-left text-xs transition-colors ${
+                        isChecked
+                          ? 'bg-indigo-950/40 text-slate-100 hover:bg-indigo-900/40'
+                          : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div
+                          className={`w-4 h-4 rounded flex items-center justify-center border transition-colors shrink-0 ${
+                            isChecked
+                              ? 'bg-indigo-600 border-indigo-500 text-white'
+                              : 'border-slate-700 bg-slate-950'
+                          }`}
+                        >
+                          {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${getCategoryColorDot(cat.color)}`} />
+                        <span className="truncate font-medium">{cat.name}</span>
                       </div>
 
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${getCategoryColorDot(cat.color)}`} />
-                      <span className="truncate font-medium">{cat.name}</span>
-                    </div>
+                      <span className="text-[10px] text-slate-500 font-mono ml-2 shrink-0">
+                        ({count})
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
 
-                    <span className="text-[10px] text-slate-500 font-mono ml-2 shrink-0">
-                      ({count})
-                    </span>
+            {/* Active Filter Helper Hint + Mobile Done */}
+            <div className="shrink-0 pt-1.5 border-t border-slate-800/80 px-1 text-[11px] text-slate-400 flex items-center justify-between gap-2">
+              <span className="truncate">
+                {isAllSelected
+                  ? 'Showing all subjects'
+                  : `Showing ${selectedCategoryIds.length} of ${categories.length} categories`}
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                {!isAllSelected && (
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="text-indigo-400 hover:text-indigo-300 font-medium"
+                  >
+                    Show All
                   </button>
-                );
-              })
-            )}
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="sm:hidden px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
           </div>
-
-          {/* Active Filter Helper Hint */}
-          <div className="pt-1.5 border-t border-slate-800/80 px-1 text-[11px] text-slate-400 flex items-center justify-between">
-            <span>
-              {isAllSelected
-                ? 'Showing all subjects'
-                : `Showing ${selectedCategoryIds.length} of ${categories.length} categories`}
-            </span>
-            {!isAllSelected && (
-              <button
-                type="button"
-                onClick={handleSelectAll}
-                className="text-indigo-400 hover:text-indigo-300 font-medium"
-              >
-                Show All
-              </button>
-            )}
-          </div>
-        </div>
+        </>
       )}
     </div>
   );

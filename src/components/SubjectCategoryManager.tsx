@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Subject, Category, RevisionSchedule } from '../types';
-import { formatInterval, formatDateToYYYYMMDD } from '../services/spacedRepetition';
+import { formatInterval, formatDateToYYYYMMDD, simulateScheduleProgression } from '../services/spacedRepetition';
 import { subjectMatchesCategories } from './MultiCategorySelect';
 import {
   COLOR_PALETTE,
@@ -10,7 +10,8 @@ import {
   getSubjectCategories,
   getSubjectColor,
 } from '../services/colors';
-import { Plus, Search, BookOpen, Trash2, Edit3, Check } from 'lucide-react';
+import { Plus, Search, BookOpen, Trash2, Edit3, Check, ChevronRight } from 'lucide-react';
+import { ModalShell } from './ModalShell';
 
 interface SubjectCategoryManagerProps {
   categories: Category[];
@@ -41,6 +42,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
   const [selectedSubjectCategoryIds, setSelectedSubjectCategoryIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'due' | 'mastered'>('all');
+  const [detailSubjectId, setDetailSubjectId] = useState<string | null>(null);
 
   // Category Modal State
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -52,16 +54,35 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
 
   // Subject Modal State
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(isAddModalOpenInitially);
+  const [isAlreadyRevising, setIsAlreadyRevising] = useState(false);
+  const [hasManuallyEditedDate, setHasManuallyEditedDate] = useState(Boolean(preselectedDateForNew));
   const [subjectForm, setSubjectForm] = useState<Partial<Subject>>({
     name: '',
     categoryId: categories[0]?.id || '',
     categoryIds: categories[0]?.id ? [categories[0].id] : [],
     scheduleId: schedules[0]?.id || 'lucidia-adaptive',
+    revisionStage: 0,
+    intervalDays: 1,
     nextDueDate: preselectedDateForNew || formatDateToYYYYMMDD(new Date()),
     notes: '',
   });
 
+  const detailSubject = detailSubjectId ? subjects.find(s => s.id === detailSubjectId) || null : null;
+
   const todayStr = formatDateToYYYYMMDD(new Date());
+
+  const getStageIntervalForSchedule = (scheduleId: string | undefined, stage: number): number => {
+    if (stage < 1) return 1;
+    const targetSchedule = schedules.find(s => s.id === scheduleId) || schedules[0];
+    if (!targetSchedule) return 1;
+    const progression = simulateScheduleProgression(targetSchedule, stage);
+    return progression[stage - 1]?.intervalDays || 1;
+  };
+
+  const addDaysToTodayStr = (days: number): string => {
+    const base = new Date(todayStr + 'T00:00:00');
+    return formatDateToYYYYMMDD(new Date(base.getTime() + days * 24 * 60 * 60 * 1000));
+  };
 
   // Filtered Subjects (supports multi-category selection)
   const filteredSubjects = subjects.filter(subject => {
@@ -109,12 +130,14 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
       intervalDays: 1,
       stability: 1.0,
       difficulty: 5.0,
-      nextDueDate: preselectedDateForNew || todayStr,
+      nextDueDate: todayStr,
       status: 'scheduled',
       notes: '',
       createdAt: new Date().toISOString(),
     });
     setSelectedSubjectCategoryIds(defaultCatId ? [defaultCatId] : []);
+    setIsAlreadyRevising(false);
+    setHasManuallyEditedDate(false);
     setNewCategoryInline('');
     setNewCategoryInlineColor('indigo');
     setIsSubjectModalOpen(true);
@@ -127,6 +150,8 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
     setSubjectForm({ ...subj });
     const initialCats = getSubjectCategoryIds(subj);
     setSelectedSubjectCategoryIds(initialCats);
+    setIsAlreadyRevising((subj.revisionStage ?? 0) >= 1);
+    setHasManuallyEditedDate(true);
     setNewCategoryInline('');
     setIsSubjectModalOpen(true);
   };
@@ -199,6 +224,27 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
 
     const primaryCatId = targetCatIds[0];
     const primaryCatName = targetCatNames[0] || 'General';
+    const targetScheduleId = subjectForm.scheduleId || schedules[0]?.id || 'lucidia-adaptive';
+    const effectiveStage = isAlreadyRevising ? Math.max(1, subjectForm.revisionStage ?? 1) : 0;
+    const effectiveInterval = isAlreadyRevising
+      ? getStageIntervalForSchedule(targetScheduleId, effectiveStage)
+      : 1;
+    const effectiveNextDueDate = subjectForm.nextDueDate || todayStr;
+    const existingSubject = subjects.find(s => s.id === subjectForm.id);
+    let effectiveLastRevisedAt = subjectForm.lastRevisedAt;
+    if (effectiveStage >= 1) {
+      const stageOrDateChanged =
+        !existingSubject ||
+        existingSubject.revisionStage !== effectiveStage ||
+        existingSubject.nextDueDate !== effectiveNextDueDate ||
+        existingSubject.scheduleId !== targetScheduleId;
+      if (stageOrDateChanged || !effectiveLastRevisedAt) {
+        const dueDateObj = new Date(effectiveNextDueDate + 'T00:00:00');
+        effectiveLastRevisedAt = new Date(
+          dueDateObj.getTime() - effectiveInterval * 24 * 60 * 60 * 1000
+        ).toISOString();
+      }
+    }
 
     const saved: Subject = {
       id: subjectForm.id || `subj-${Date.now()}`,
@@ -208,16 +254,16 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
       categoryIds: targetCatIds,
       categoryNames: targetCatNames,
       color: subjectForm.color || undefined,
-      scheduleId: subjectForm.scheduleId || schedules[0]?.id || 'lucidia-adaptive',
-      revisionStage: subjectForm.revisionStage ?? 0,
-      intervalDays: subjectForm.intervalDays ?? 1,
-      stability: subjectForm.stability ?? 1.0,
+      scheduleId: targetScheduleId,
+      revisionStage: effectiveStage,
+      intervalDays: effectiveInterval,
+      stability: effectiveStage >= 1 ? Number(effectiveInterval.toFixed(1)) : 1.0,
       difficulty: subjectForm.difficulty ?? 5.0,
-      nextDueDate: subjectForm.nextDueDate || todayStr,
-      status: (subjectForm.intervalDays || 1) >= 30 ? 'mastered' : 'scheduled',
+      nextDueDate: effectiveNextDueDate,
+      status: effectiveInterval >= 30 ? 'mastered' : 'scheduled',
       notes: subjectForm.notes || '',
       createdAt: subjectForm.createdAt || new Date().toISOString(),
-      lastRevisedAt: subjectForm.lastRevisedAt,
+      lastRevisedAt: effectiveLastRevisedAt,
     };
 
     onSaveSubject(saved);
@@ -350,8 +396,8 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
         })}
       </div>
 
-      {/* Main Container: Search, Filter, and Subject Grid */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+      {/* Main Container: Search, Filter, and Compact Subject List */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xl space-y-4 sm:space-y-5">
         {/* Search & Filter Sub-Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="relative flex-1">
@@ -368,7 +414,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
           <div className="flex items-center gap-1 p-1 bg-slate-950 border border-slate-800 rounded-lg shrink-0">
             <button
               onClick={() => setStatusFilter('all')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                 statusFilter === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -376,7 +422,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
             </button>
             <button
               onClick={() => setStatusFilter('due')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                 statusFilter === 'due' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -384,7 +430,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
             </button>
             <button
               onClick={() => setStatusFilter('mastered')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                 statusFilter === 'mastered' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -393,295 +439,418 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
           </div>
         </div>
 
-        {/* Subjects Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredSubjects.length === 0 ? (
-            <div className="col-span-full py-12 text-center text-slate-500 text-sm">
-              No subjects found matching your criteria.
-            </div>
-          ) : (
-            filteredSubjects.map(subject => {
+        {/* Compact Subjects List */}
+        {filteredSubjects.length === 0 ? (
+          <div className="py-12 text-center text-slate-500 text-sm">
+            No subjects found matching your criteria.
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-800/70 border border-slate-800/80 rounded-xl bg-slate-950/50 overflow-hidden">
+            {filteredSubjects.map(subject => {
               const subjectCats = getSubjectCategories(subject, categories);
               const subjectAccent = getSubjectColor(subject, categories);
               const assignedSchedule = schedules.find(s => s.id === subject.scheduleId);
               const isDue = subject.nextDueDate <= todayStr;
+              const visibleCats = subjectCats.slice(0, 2);
+              const extraCatsCount = subjectCats.length - visibleCats.length;
 
               return (
                 <div
                   key={subject.id}
-                  className={`p-5 rounded-2xl border transition-all flex flex-col justify-between space-y-4 ${
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDetailSubjectId(subject.id)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setDetailSubjectId(subject.id);
+                    }
+                  }}
+                  className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 px-3.5 sm:px-4 py-3 transition-colors cursor-pointer focus:outline-none focus-visible:bg-slate-900 ${
                     isDue
-                      ? 'bg-slate-950/90 border-indigo-500/40 shadow-md shadow-indigo-950/30'
-                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                      ? 'bg-indigo-950/20 hover:bg-indigo-950/35'
+                      : 'hover:bg-slate-900/70'
                   }`}
                 >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                          {subjectCats.map(cat => (
-                            <span
-                              key={cat.id}
-                              className={`text-[10px] font-semibold px-2 py-0.5 rounded border inline-block ${getColorClasses(cat.color)}`}
-                            >
-                              {cat.name}
-                            </span>
-                          ))}
-                          {assignedSchedule && (
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-slate-700/80 bg-slate-900/90 text-slate-400">
-                              {assignedSchedule.name}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-base font-bold text-slate-100 leading-snug flex items-center gap-2">
-                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getDotColorClass(subjectAccent)}`} />
-                          <span>{subject.name}</span>
-                        </h3>
-                      </div>
+                  {/* Main Title, Badges & Tabular Due Info */}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getDotColorClass(subjectAccent)}`} />
+                      <h3 className="text-sm font-semibold text-slate-100 truncate max-w-full">
+                        {subject.name}
+                      </h3>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => handleEditSubject(subject)}
-                          className="min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                          title="Edit subject"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => onDeleteSubject(subject.id)}
-                          className="min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                          title="Delete subject"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {visibleCats.map(cat => (
+                          <span
+                            key={cat.id}
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${getColorClasses(cat.color)}`}
+                          >
+                            {cat.name}
+                          </span>
+                        ))}
+                        {extraCatsCount > 0 && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-700 bg-slate-900 text-slate-400 whitespace-nowrap">
+                            +{extraCatsCount}
+                          </span>
+                        )}
+                        {assignedSchedule && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-slate-700/80 bg-slate-900/90 text-slate-400 whitespace-nowrap">
+                            {assignedSchedule.name}
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    {subject.notes && (
-                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                        {subject.notes}
-                      </p>
-                    )}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-[18px] text-[11px] font-mono tabular-nums text-slate-400">
+                      <span>Stage {subject.revisionStage}</span>
+                      <span aria-hidden="true" className="text-slate-600">·</span>
+                      <span>{formatInterval(subject.intervalDays)}</span>
+                      <span aria-hidden="true" className="text-slate-600">·</span>
+                      <span className={isDue ? 'text-indigo-400 font-semibold' : 'text-slate-300'}>
+                        {isDue ? 'Due Today' : `Next: ${subject.nextDueDate}`}
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Metadata and Log Action */}
-                  <div className="space-y-3 pt-3 border-t border-slate-800/80">
-                    <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-500 font-mono">
-                      <div>
-                        <span className="block text-slate-600 text-[10px]">STAGE</span>
-                        <span className="font-bold text-slate-300">Stage {subject.revisionStage}</span>
-                      </div>
-                      <div>
-                        <span className="block text-slate-600 text-[10px]">INTERVAL</span>
-                        <span className="font-bold text-slate-300">{formatInterval(subject.intervalDays)}</span>
-                      </div>
-                      <div>
-                        <span className="block text-slate-600 text-[10px]">NEXT REVISION</span>
-                        <span className={`font-bold ${isDue ? 'text-indigo-400' : 'text-slate-300'}`}>
-                          {isDue ? 'Due Today' : subject.nextDueDate}
-                        </span>
-                      </div>
-                    </div>
-
+                  {/* Row Actions: Direct Log Button + Detail Affordance */}
+                  <div className="flex items-center justify-end gap-2 pl-[18px] sm:pl-0 shrink-0">
                     <button
-                      onClick={() => onOpenLogSession(subject)}
-                      className={`w-full min-h-[44px] py-2 px-3 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] ${
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onOpenLogSession(subject);
+                      }}
+                      className={`min-h-[38px] px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 active:scale-[0.98] ${
                         isDue
-                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-600/30'
-                          : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800'
+                          ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-600/25'
+                          : 'bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700/80'
                       }`}
                     >
-                      <Check className="w-4 h-4" />
-                      <span>{isDue ? 'Log Due Revision Session' : 'Log Early Revision'}</span>
+                      <Check className="w-3.5 h-3.5 shrink-0" />
+                      <span>{isDue ? 'Log Due' : 'Log Early'}</span>
                     </button>
+                    <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors shrink-0" />
                   </div>
                 </div>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Category Create / Edit Modal */}
-      {isCategoryModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-white mb-4">
-              {categoryForm.id ? 'Edit Category' : 'Create Category'}
-            </h3>
+      {/* Subject Details Popup Modal */}
+      {detailSubject && (() => {
+        const subjectCats = getSubjectCategories(detailSubject, categories);
+        const subjectAccent = getSubjectColor(detailSubject, categories);
+        const assignedSchedule = schedules.find(s => s.id === detailSubject.scheduleId);
+        const isDue = detailSubject.nextDueDate <= todayStr;
 
-            <form onSubmit={handleSaveCategorySubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Category Name
-                </label>
-                <input
-                  type="text"
-                  value={categoryForm.name}
-                  onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                  placeholder="e.g. Cognitive Neuroscience"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-                  required
-                />
+        return (
+          <ModalShell
+            isOpen={Boolean(detailSubject)}
+            onClose={() => setDetailSubjectId(null)}
+            maxWidthClass="max-w-lg"
+            closeAriaLabel="Close subject details"
+            headerContent={
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getDotColorClass(subjectAccent)}`} />
+                  <h3 className="text-base sm:text-lg font-bold text-white leading-snug break-words">
+                    {detailSubject.name}
+                  </h3>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {subjectCats.map(cat => (
+                    <span
+                      key={cat.id}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded border inline-block ${getColorClasses(cat.color)}`}
+                    >
+                      {cat.name}
+                    </span>
+                  ))}
+                  {assignedSchedule && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-slate-700/80 bg-slate-950/80 text-slate-300">
+                      {assignedSchedule.name}
+                    </span>
+                  )}
+                </div>
               </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    Accent Color
-                  </label>
-                  <span className="text-[11px] font-mono text-slate-400 capitalize">
-                    {categoryForm.color || 'indigo'}
+            }
+          >
+            {/* Scrollable Body */}
+            <div className="flex-1 min-h-0 min-w-0 max-w-full overflow-y-auto overflow-x-hidden px-4 sm:px-5 py-3.5 space-y-4">
+              {/* Stage / Interval / Next Revision Metrics */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-2.5 p-2.5 sm:p-3 bg-slate-950/70 border border-slate-800 rounded-xl font-mono tabular-nums min-w-0">
+                <div className="min-w-0">
+                  <span className="block text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Stage</span>
+                  <span className="text-xs sm:text-sm font-bold text-slate-200 block truncate">Stage {detailSubject.revisionStage}</span>
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Interval</span>
+                  <span className="text-xs sm:text-sm font-bold text-slate-200 block truncate">{formatInterval(detailSubject.intervalDays)}</span>
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Next Revision</span>
+                  <span className={`text-xs sm:text-sm font-bold block truncate ${isDue ? 'text-indigo-400' : 'text-slate-200'}`}>
+                    {isDue ? 'Due Today' : detailSubject.nextDueDate}
                   </span>
                 </div>
-                <div className="grid grid-cols-6 gap-2 p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl">
-                  {COLOR_PALETTE.map(option => {
-                    const isActive = (categoryForm.color || 'indigo') === option.id;
+              </div>
+
+              {/* Syllabus Notes */}
+              <div className="space-y-1.5 min-w-0">
+                <div className="text-xs font-semibold text-slate-300">
+                  Syllabus Notes &amp; Concepts
+                </div>
+                <div className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl text-xs sm:text-sm leading-relaxed min-w-0">
+                  {detailSubject.notes && detailSubject.notes.trim() ? (
+                    <p className="text-slate-200 whitespace-pre-wrap break-words">{detailSubject.notes}</p>
+                  ) : (
+                    <p className="text-slate-500 italic">No syllabus notes added for this subject yet.</p>
+                  )}
+                </div>
+                {detailSubject.lastRevisedAt && (
+                  <p className="text-[11px] font-mono text-slate-500">
+                    Last revised: {detailSubject.lastRevisedAt.split('T')[0]}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Sticky Footer Actions (Stacked cleanly on mobile, single row on sm+) */}
+            <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 sm:px-5 py-3 bg-slate-900/95 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  const subj = detailSubject;
+                  setDetailSubjectId(null);
+                  onOpenLogSession(subj);
+                }}
+                className={`w-full sm:w-auto sm:order-2 min-h-[40px] px-4 py-2 text-xs font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 whitespace-nowrap active:scale-[0.98] ${
+                  isDue
+                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-600/30'
+                    : 'bg-indigo-600/90 hover:bg-indigo-500 text-white'
+                }`}
+              >
+                <Check className="w-4 h-4 shrink-0" />
+                <span>{isDue ? 'Log Due Revision Session' : 'Log Early Revision'}</span>
+              </button>
+
+              <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto sm:order-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const subj = detailSubject;
+                    setDetailSubjectId(null);
+                    handleEditSubject(subj);
+                  }}
+                  className="min-h-[38px] px-3 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = detailSubject.id;
+                    setDetailSubjectId(null);
+                    onDeleteSubject(id);
+                  }}
+                  className="min-h-[38px] px-3 py-1.5 text-xs font-semibold text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-xl transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </div>
+            </div>
+          </ModalShell>
+        );
+      })()}
+
+      {/* Category Create / Edit Modal */}
+      <ModalShell
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        title={categoryForm.id ? 'Edit Category' : 'Create Category'}
+        maxWidthClass="max-w-md"
+        closeAriaLabel="Close category modal"
+      >
+        <form onSubmit={handleSaveCategorySubmit} className="flex flex-col flex-1 min-h-0 min-w-0 max-w-full">
+          <div className="flex-1 min-h-0 min-w-0 max-w-full overflow-y-auto overflow-x-hidden px-4 sm:px-5 py-3.5 space-y-3.5">
+            <div className="min-w-0">
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Category Name
+              </label>
+              <input
+                type="text"
+                value={categoryForm.name}
+                onChange={e => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                placeholder="e.g. Cognitive Neuroscience"
+                className="w-full min-w-0 max-w-full box-border px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                required
+              />
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-300">
+                  Accent Color
+                </label>
+                <span className="text-[11px] font-mono text-slate-400 capitalize">
+                  {categoryForm.color || 'indigo'}
+                </span>
+              </div>
+              <div className="grid grid-cols-6 gap-1.5 p-2 bg-slate-950/70 border border-slate-800 rounded-xl">
+                {COLOR_PALETTE.map(option => {
+                  const isActive = (categoryForm.color || 'indigo') === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setCategoryForm({ ...categoryForm, color: option.id })}
+                      title={option.label}
+                      className={`h-8 rounded-lg flex items-center justify-center transition-all border ${
+                        isActive
+                          ? `bg-slate-800 border-white/60 ring-2 ${option.ringClass}`
+                          : 'bg-slate-900/70 border-slate-800 hover:border-slate-600'
+                      }`}
+                    >
+                      <span className={`w-4 h-4 rounded-full ${option.swatchClass} flex items-center justify-center`}>
+                        {isActive && <Check className="w-2.5 h-2.5 text-slate-950 stroke-[3]" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Description (Optional)
+              </label>
+              <textarea
+                rows={2}
+                value={categoryForm.description}
+                onChange={e => setCategoryForm({ ...categoryForm, description: e.target.value })}
+                placeholder="Summary of this academic domain..."
+                className="w-full min-w-0 max-w-full box-border px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          <div className="shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-2.5 px-4 sm:px-5 py-3 bg-slate-900/95 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsCategoryModalOpen(false)}
+              className="w-full sm:w-auto min-h-[40px] px-4 py-1.5 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="w-full sm:w-auto min-h-[40px] px-5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all active:scale-[0.98]"
+            >
+              Save Category
+            </button>
+          </div>
+        </form>
+      </ModalShell>
+
+      {/* Subject Create / Edit Modal */}
+      <ModalShell
+        isOpen={isSubjectModalOpen}
+        onClose={() => setIsSubjectModalOpen(false)}
+        title={
+          subjectForm.id?.startsWith('subj-') && subjects.some(s => s.id === subjectForm.id)
+            ? 'Edit Subject'
+            : 'Create New Subject'
+        }
+        maxWidthClass="max-w-lg"
+        closeAriaLabel="Close subject form"
+      >
+        <form onSubmit={handleSaveSubjectSubmit} className="flex flex-col flex-1 min-h-0 min-w-0 max-w-full">
+          {/* Scrollable Body */}
+          <div className="flex-1 min-h-0 min-w-0 max-w-full overflow-y-auto overflow-x-hidden px-4 sm:px-5 py-3.5 space-y-3">
+            <div className="min-w-0">
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Subject Name / Topic
+              </label>
+              <input
+                type="text"
+                value={subjectForm.name}
+                onChange={e => setSubjectForm({ ...subjectForm, name: e.target.value })}
+                placeholder="e.g. Distributed Consensus & Paxos"
+                className="w-full min-w-0 max-w-full box-border px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
+                required
+              />
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <label className="block text-xs font-semibold text-slate-300">
+                  Academic Categories <span className="text-slate-500 font-normal">(select one or more)</span>
+                </label>
+                <span className="text-[11px] text-indigo-400 font-medium shrink-0">
+                  {selectedSubjectCategoryIds.length} selected
+                </span>
+              </div>
+
+              {categories.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-2 bg-slate-950/70 border border-slate-800 rounded-xl">
+                  {categories.map(c => {
+                    const isSelected = selectedSubjectCategoryIds.includes(c.id);
+                    const isPrimary = selectedSubjectCategoryIds[0] === c.id;
                     return (
                       <button
-                        key={option.id}
+                        key={c.id}
                         type="button"
-                        onClick={() => setCategoryForm({ ...categoryForm, color: option.id })}
-                        title={option.label}
-                        className={`h-9 rounded-lg flex items-center justify-center transition-all border ${
-                          isActive
-                            ? `bg-slate-800 border-white/60 ring-2 ${option.ringClass}`
-                            : 'bg-slate-900/70 border-slate-800 hover:border-slate-600'
+                        onClick={() => handleToggleSubjectCategory(c.id)}
+                        className={`min-h-[30px] px-2 py-0.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all border ${
+                          isSelected
+                            ? 'bg-indigo-600/25 border-indigo-500 text-indigo-200 shadow-xs'
+                            : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
                         }`}
                       >
-                        <span className={`w-4 h-4 rounded-full ${option.swatchClass} flex items-center justify-center`}>
-                          {isActive && <Check className="w-2.5 h-2.5 text-slate-950 stroke-[3]" />}
-                        </span>
+                        <span className={`w-2 h-2 rounded-full ${getDotColorClass(c.color)}`} />
+                        <span>{c.name}</span>
+                        {isSelected && <Check className="w-3 h-3 text-indigo-400 ml-0.5" />}
+                        {isPrimary && (
+                          <span className="text-[9px] uppercase tracking-wider bg-indigo-500/30 text-indigo-300 px-1 py-0.5 rounded font-semibold ml-0.5">
+                            Primary
+                          </span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
-              </div>
+              )}
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Description (Optional)
-                </label>
-                <textarea
-                  rows={2}
-                  value={categoryForm.description}
-                  onChange={e => setCategoryForm({ ...categoryForm, description: e.target.value })}
-                  placeholder="Summary of this academic domain..."
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsCategoryModalOpen(false)}
-                  className="min-h-[44px] px-4 py-2 text-xs font-medium text-slate-400 hover:text-white transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="min-h-[44px] px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all active:scale-[0.98]"
-                >
-                  Save Category
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Subject Create / Edit Modal */}
-      {isSubjectModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-4 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-white mb-4">
-              {subjectForm.id?.startsWith('subj-') && subjects.some(s => s.id === subjectForm.id)
-                ? 'Edit Subject'
-                : 'Create New Subject'}
-            </h3>
-
-            <form onSubmit={handleSaveSubjectSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Subject Name / Topic
-                </label>
+              {/* Inline Quick-Add Category (Stacks onto two clean lines on narrow phones) */}
+              <div className="mt-1.5 flex flex-col sm:flex-row sm:items-center gap-1.5 min-w-0 max-w-full">
                 <input
                   type="text"
-                  value={subjectForm.name}
-                  onChange={e => setSubjectForm({ ...subjectForm, name: e.target.value })}
-                  placeholder="e.g. Distributed Consensus & Paxos"
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    Academic Categories <span className="text-slate-500 font-normal">(select one or more)</span>
-                  </label>
-                  <span className="text-[11px] text-indigo-400 font-medium">
-                    {selectedSubjectCategoryIds.length} selected
-                  </span>
-                </div>
-
-                {categories.length > 0 && (
-                  <div className="space-y-1.5">
-                    <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-950/70 border border-slate-800 rounded-xl">
-                      {categories.map(c => {
-                        const isSelected = selectedSubjectCategoryIds.includes(c.id);
-                        const isPrimary = selectedSubjectCategoryIds[0] === c.id;
-                        return (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => handleToggleSubjectCategory(c.id)}
-                            className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all border ${
-                              isSelected
-                                ? 'bg-indigo-600/25 border-indigo-500 text-indigo-200 shadow-xs'
-                                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                            }`}
-                          >
-                            <span className={`w-2 h-2 rounded-full ${getDotColorClass(c.color)}`} />
-                            <span>{c.name}</span>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-indigo-400 ml-0.5" />}
-                            {isPrimary && (
-                              <span className="text-[9px] uppercase tracking-wider bg-indigo-500/30 text-indigo-300 px-1 py-0.5 rounded font-semibold ml-0.5">
-                                Primary
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Inline Quick-Add Category */}
-                <div className="mt-2 flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={newCategoryInline}
-                    onChange={e => setNewCategoryInline(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleInlineAddCategory();
-                      }
-                    }}
-                    placeholder={
-                      categories.length === 0
-                        ? 'Type category (e.g. Science)'
-                        : 'Quick-add another category...'
+                  value={newCategoryInline}
+                  onChange={e => setNewCategoryInline(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleInlineAddCategory();
                     }
-                    className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                  />
+                  }}
+                  placeholder={
+                    categories.length === 0
+                      ? 'Type category (e.g. Science)'
+                      : 'Quick-add another category...'
+                  }
+                  className="w-full sm:flex-1 min-w-0 max-w-full box-border px-2.5 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                />
+                <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
                   <select
                     value={newCategoryInlineColor}
                     onChange={e => setNewCategoryInlineColor(e.target.value)}
                     aria-label="New category color"
-                    className="px-2 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="flex-1 sm:flex-initial min-w-0 px-2 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
                   >
                     {COLOR_PALETTE.map(opt => (
                       <option key={opt.id} value={opt.id}>
@@ -693,127 +862,279 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
                     type="button"
                     onClick={handleInlineAddCategory}
                     disabled={!newCategoryInline.trim()}
-                    className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-indigo-300 border border-slate-700 transition-colors shrink-0"
+                    className="min-h-[34px] px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-indigo-300 border border-slate-700 transition-colors shrink-0 whitespace-nowrap"
                   >
                     + Add
                   </button>
                 </div>
-
-                {categories.length > 0 && selectedSubjectCategoryIds.length === 0 && !newCategoryInline.trim() && (
-                  <p className="text-[11px] text-amber-400 mt-1">
-                    Please select at least one category for this subject.
-                  </p>
-                )}
               </div>
 
-              {/* Subject Accent Color Swatch Picker */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    Subject Accent Color
-                  </label>
-                  <span className="text-[11px] font-mono text-slate-400 capitalize">
-                    {subjectForm.color || 'Auto (Category)'}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setSubjectForm({ ...subjectForm, color: undefined })}
-                    className={`h-8 px-2.5 rounded-lg text-[11px] font-medium border transition-all ${
-                      !subjectForm.color
-                        ? 'bg-indigo-600/25 border-indigo-500 text-indigo-200'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Auto
-                  </button>
-                  {COLOR_PALETTE.map(option => {
-                    const isActive = subjectForm.color === option.id;
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setSubjectForm({ ...subjectForm, color: option.id })}
-                        title={option.label}
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border ${
-                          isActive
-                            ? `bg-slate-800 border-white/60 ring-2 ${option.ringClass}`
-                            : 'bg-slate-900/70 border-slate-800 hover:border-slate-600'
-                        }`}
-                      >
-                        <span className={`w-4 h-4 rounded-full ${option.swatchClass} flex items-center justify-center`}>
-                          {isActive && <Check className="w-2.5 h-2.5 text-slate-950 stroke-[3]" />}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              {categories.length > 0 && selectedSubjectCategoryIds.length === 0 && !newCategoryInline.trim() && (
+                <p className="text-[11px] text-amber-400 mt-1">
+                  Please select at least one category for this subject.
+                </p>
+              )}
+            </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Revision Schedule Model
+            {/* Subject Accent Color Swatch Picker */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-300">
+                  Subject Accent Color
                 </label>
-                <select
-                  value={subjectForm.scheduleId}
-                  onChange={e => setSubjectForm({ ...subjectForm, scheduleId: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                >
-                  {schedules.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                <span className="text-[11px] font-mono text-slate-400 capitalize">
+                  {subjectForm.color || 'Auto (Category)'}
+                </span>
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  First / Next Revision Date on Calendar
-                </label>
-                <input
-                  type="date"
-                  value={subjectForm.nextDueDate}
-                  onChange={e => setSubjectForm({ ...subjectForm, nextDueDate: e.target.value })}
-                  className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Syllabus Notes / Concepts to Revise
-                </label>
-                <textarea
-                  rows={3}
-                  value={subjectForm.notes}
-                  onChange={e => setSubjectForm({ ...subjectForm, notes: e.target.value })}
-                  placeholder="e.g. Master leader election, quorum validation, and log compaction..."
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <div className="flex flex-wrap items-center gap-1.5 p-2 bg-slate-950/70 border border-slate-800 rounded-xl">
                 <button
                   type="button"
-                  onClick={() => setIsSubjectModalOpen(false)}
-                  className="min-h-[44px] px-4 py-2 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+                  onClick={() => setSubjectForm({ ...subjectForm, color: undefined })}
+                  className={`h-7 px-2 rounded-lg text-[11px] font-medium border transition-all ${
+                    !subjectForm.color
+                      ? 'bg-indigo-600/25 border-indigo-500 text-indigo-200'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                  }`}
                 >
-                  Cancel
+                  Auto
                 </button>
+                {COLOR_PALETTE.map(option => {
+                  const isActive = subjectForm.color === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setSubjectForm({ ...subjectForm, color: option.id })}
+                      title={option.label}
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all border ${
+                        isActive
+                          ? `bg-slate-800 border-white/60 ring-2 ${option.ringClass}`
+                          : 'bg-slate-900/70 border-slate-800 hover:border-slate-600'
+                      }`}
+                    >
+                      <span className={`w-3.5 h-3.5 rounded-full ${option.swatchClass} flex items-center justify-center`}>
+                        {isActive && <Check className="w-2.5 h-2.5 text-slate-950 stroke-[3]" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Revision Schedule Model
+              </label>
+              <select
+                value={subjectForm.scheduleId}
+                onChange={e => {
+                  const nextScheduleId = e.target.value;
+                  if (isAlreadyRevising) {
+                    const stage = Math.max(1, subjectForm.revisionStage || 1);
+                    const nextInterval = getStageIntervalForSchedule(nextScheduleId, stage);
+                    setSubjectForm({
+                      ...subjectForm,
+                      scheduleId: nextScheduleId,
+                      revisionStage: stage,
+                      intervalDays: nextInterval,
+                      stability: nextInterval,
+                      nextDueDate: hasManuallyEditedDate
+                        ? subjectForm.nextDueDate
+                        : addDaysToTodayStr(nextInterval),
+                    });
+                  } else {
+                    setSubjectForm({ ...subjectForm, scheduleId: nextScheduleId });
+                  }
+                }}
+                className="w-full min-w-0 max-w-full box-border px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+              >
+                {schedules.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Already Revising Toggle + Expandable Stage Selector */}
+            <div className="p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2.5 min-w-0">
+              <div className="flex items-center justify-between gap-3 min-w-0">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-slate-200">
+                    Already Revising
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Start directly at an active stage instead of Stage 0.
+                  </p>
+                </div>
                 <button
-                  type="submit"
-                  disabled={categories.length > 0 && selectedSubjectCategoryIds.length === 0 && !newCategoryInline.trim()}
-                  className="min-h-[44px] px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-sm transition-all active:scale-[0.98]"
+                  type="button"
+                  role="switch"
+                  aria-checked={isAlreadyRevising}
+                  onClick={() => {
+                    const nextEnabled = !isAlreadyRevising;
+                    setIsAlreadyRevising(nextEnabled);
+                    if (nextEnabled) {
+                      const nextStage = Math.max(1, subjectForm.revisionStage || 1);
+                      const nextInterval = getStageIntervalForSchedule(subjectForm.scheduleId, nextStage);
+                      setSubjectForm({
+                        ...subjectForm,
+                        revisionStage: nextStage,
+                        intervalDays: nextInterval,
+                        stability: nextInterval,
+                        nextDueDate: hasManuallyEditedDate
+                          ? subjectForm.nextDueDate
+                          : addDaysToTodayStr(nextInterval),
+                      });
+                    } else {
+                      setSubjectForm({
+                        ...subjectForm,
+                        revisionStage: 0,
+                        intervalDays: 1,
+                        stability: 1.0,
+                        nextDueDate: hasManuallyEditedDate
+                          ? subjectForm.nextDueDate
+                          : (preselectedDateForNew || todayStr),
+                      });
+                    }
+                  }}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                    isAlreadyRevising ? 'bg-indigo-600' : 'bg-slate-700'
+                  }`}
                 >
-                  Save Subject
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
+                      isAlreadyRevising ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
                 </button>
               </div>
-            </form>
+
+              {isAlreadyRevising && (() => {
+                const selectedScheduleObj =
+                  schedules.find(s => s.id === subjectForm.scheduleId) || schedules[0];
+                const stageProgression = selectedScheduleObj
+                  ? simulateScheduleProgression(selectedScheduleObj, 12)
+                  : [];
+                const activeStage = Math.max(1, subjectForm.revisionStage || 1);
+                const activeInterval = getStageIntervalForSchedule(subjectForm.scheduleId, activeStage);
+
+                return (
+                  <div className="pt-2 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-2.5 min-w-0">
+                    <div className="min-w-0">
+                      <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                        Current Revision Stage
+                      </label>
+                      <select
+                        value={activeStage}
+                        onChange={e => {
+                          const nextStage = parseInt(e.target.value, 10) || 1;
+                          const nextInterval = getStageIntervalForSchedule(subjectForm.scheduleId, nextStage);
+                          setSubjectForm({
+                            ...subjectForm,
+                            revisionStage: nextStage,
+                            intervalDays: nextInterval,
+                            stability: nextInterval,
+                            nextDueDate: hasManuallyEditedDate
+                              ? subjectForm.nextDueDate
+                              : addDaysToTodayStr(nextInterval),
+                          });
+                        }}
+                        className="w-full min-w-0 max-w-full box-border px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+                      >
+                        {Array.from({ length: 12 }, (_, idx) => idx + 1).map(stageNum => {
+                          const stepDays = stageProgression[stageNum - 1]?.intervalDays;
+                          return (
+                            <option key={stageNum} value={stageNum}>
+                              Stage {stageNum}
+                              {stepDays !== undefined ? ` (${formatInterval(stepDays)})` : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    <div className="min-w-0">
+                      <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                        Schedule Interval
+                      </label>
+                      <div className="px-2.5 py-1.5 bg-slate-900/80 border border-slate-800 rounded-lg flex items-center justify-between gap-2 min-w-0">
+                        <span className="text-xs font-bold font-mono tabular-nums text-indigo-300 truncate">
+                          {formatInterval(activeInterval)} ({activeInterval}d)
+                        </span>
+                        <span className="text-[10px] text-slate-500 whitespace-nowrap shrink-0">
+                          Auto-filled
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                <label className="block text-xs font-semibold text-slate-300">
+                  {isAlreadyRevising ? 'Next Revision Date on Calendar' : 'First / Next Revision Date on Calendar'}
+                </label>
+                {isAlreadyRevising && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHasManuallyEditedDate(true);
+                      setSubjectForm({ ...subjectForm, nextDueDate: todayStr });
+                    }}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium whitespace-nowrap"
+                  >
+                    Set to Today
+                  </button>
+                )}
+              </div>
+              <input
+                type="date"
+                value={subjectForm.nextDueDate}
+                onChange={e => {
+                  setHasManuallyEditedDate(true);
+                  setSubjectForm({ ...subjectForm, nextDueDate: e.target.value });
+                }}
+                className="block w-full min-w-0 max-w-full box-border px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
+                required
+              />
+            </div>
+
+            <div className="min-w-0">
+              <label className="block text-xs font-semibold text-slate-300 mb-1">
+                Syllabus Notes / Concepts to Revise
+              </label>
+              <textarea
+                rows={2}
+                value={subjectForm.notes}
+                onChange={e => setSubjectForm({ ...subjectForm, notes: e.target.value })}
+                placeholder="e.g. Master leader election, quorum validation, and log compaction..."
+                className="w-full min-w-0 max-w-full box-border px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+              />
+            </div>
           </div>
-        </div>
-      )}
+
+          {/* Sticky Footer */}
+          <div className="shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-2.5 px-4 sm:px-5 py-3 bg-slate-900/95 border-t border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsSubjectModalOpen(false)}
+              className="w-full sm:w-auto min-h-[40px] px-4 py-1.5 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={categories.length > 0 && selectedSubjectCategoryIds.length === 0 && !newCategoryInline.trim()}
+              className="w-full sm:w-auto min-h-[40px] px-5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-sm transition-all active:scale-[0.98]"
+            >
+              Save Subject
+            </button>
+          </div>
+        </form>
+      </ModalShell>
     </div>
   );
 };
