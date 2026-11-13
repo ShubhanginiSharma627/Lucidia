@@ -1,173 +1,163 @@
-# Lucidia — Intelligent Spaced Revision Calendar & 3D Cognitive Vault
+# Lucidia — Spaced Repetition, Custom Revision Schedules & 3D Trophy Vault
 
-> **Empowering lifelong learners with mathematical spacing curves, AI-guided memory audits, and interactive 3D WebGL achievements.**
-
----
-
-## 🌟 Overview
-
-**Lucidia** is a full-stack, spaced repetition learning platform built around Hermann Ebbinghaus’s forgetting curve formula ($R = e^{-t/S}$). It balances academic scheduling, active recall tracking, and gamified cognitive rewards.
-
-Whether studying complex algorithms, neuroanatomy, or historical chronologies, Lucidia calculates the exact optimal review window before memory decay accelerates, while celebrating your consolidation milestones with interactive 3D trophies in a real-time Three.js vault.
+> **A neuroscience-backed spaced repetition platform combining Ebbinghaus forgetting-curve modeling, multi-category subject planning, custom step-interval curves, Gemini AI cognitive audits, and an interactive Three.js 3D Trophy Vault.**
 
 ---
 
-## ✨ Key Features
+## Overview
 
-### 📅 1. Spaced Revision Calendar & Agenda
-- **Algorithmic Review Scheduling**: Computes next-due dates using four recall ratings:
-  - `Again` (1): Immediate reset to Stage 1 for concepts requiring re-learning.
-  - `Hard` (2): Slower interval expansion with increased difficulty weighting.
-  - `Good` (3): Standard spacing expansion based on subject stability.
-  - `Easy` (4): Accelerated consolidation bonus for rapid recall.
-- **Dual-Pane Tablet & Mobile Layout**:
-  - Tablet (768px–1024px): Side-by-side split featuring the interactive monthly calendar on the left and selected date agenda with quick-log actions on the right.
-  - Mobile (<768px): Responsive calendar grid with expandable day agenda drawer, slide-out navigation menu, and touch-optimized buttons.
-  - Desktop: Expanded view with category filters, overdue badges, and instant revision booking.
-
-### 🏆 2. 3D Trophy Vault (Three.js WebGL)
-- **7 Procedural Composite Artifacts**:
-  - *The Synaptic Spark*: Concentric counter-rotating gimbals embracing an ionized core.
-  - *The Memory Prism*: Octahedral crystal suspended within stabilization brackets.
-  - *The Chrono Compass*: Dual astrolabe chapter rings with a magnetic directional needle.
-  - *The Neuro-Lattice*: 12-node icosahedral polyhedral matrix with strut cylinders.
-  - *The Feynman Monolith*: Tapered obelisk with gold inlay runic channels and quantum halo.
-  - *The Polymath Sphere*: Tri-orbital armillary rings with cardinal node spheres.
-  - *The Celestial Synapse*: Multi-tier floating magnetic discs crowned by an apex spire.
-- **PBR Materials & Studio Lighting**:
-  - 5 Unlockable Finishes: *Obsidian Titanium*, *Celestial Aurum (Gold)*, *Iridescent Chromium*, *Emerald Neuro-Crystal*, and *Starlight Platinum*.
-  - 4 Custom 3D Pedestals: *Minimal Deep Slate*, *Levitating Obsidian*, *Cybernetic Lattice*, and *Golden Solarium*.
-  - Soft procedural radial contact shadows and real-time reflections via `PMREMGenerator` and `RoomEnvironment`.
-  - Orbit controls with momentum damping, zoom bounds, reset camera, and auto-rotation toggle.
-  - Software WebGL detection guard (`detectSoftwareGl`) for low-power or virtualized devices.
-
-### ⚡ 3. Synaptic Token Economy & Milestones
-- **Earn Tokens on Every Revision**:
-  - Base completion rewards (`+15 ⚡`).
-  - Recall quality bonuses (`+10` for Good, `+15` for Easy).
-  - Consecutive streak multipliers (`3+ days`).
-  - Mastery leap bonuses (`+100 ⚡` when reaching $\ge 30$-day intervals).
-- **Gamification Progression**:
-  - Tier titles: *Synaptic Initiate* $\rightarrow$ *Memory Apprentice* $\rightarrow$ *Consolidation Adept* $\rightarrow$ *Ebbinghaus Scholar* $\rightarrow$ *Neuro-Architect* $\rightarrow$ *Cognitive Ascendant*.
-  - Trophy Vault Shop: Spend earned tokens to unlock metallic finishes and pedestal styles.
-  - Real-time achievement unlock celebratory banner with 1-click inspection in the 3D Vault.
-
-### 🧠 4. AI Cognitive Learning Intelligence
-- **Longitudinal Trend Visualizer**: Responsive 7-day and 14-day study volume and accuracy trend curves without font or axis distortion.
-- **Theoretical Ebbinghaus Decay Simulator**: Real-time plots of retention decay curves across stages 1 through 3 ($R = e^{-t/S}$).
-- **Gemini-Powered Audits**: Analyzes study logs to identify retention anomalies, detect subjects plateauing, and recommend customized revision schedule multipliers.
-
-### ☁️ 5. Cloud Sync & Authentication
-- **Firebase Firestore Live Sync**: Instant multi-device sync for categories, subjects, custom revision schedules, and logs.
-- **Google OAuth**: One-click authentication with user profile avatar and sync indicator.
-- **Offline Resilience**: LocalStorage fallback mechanism ensures zero disruption when offline.
+**Lucidia** helps learners schedule, track, and optimize long-term knowledge retention around Hermann Ebbinghaus’s forgetting curve formula ($R = e^{-t/S}$). It pairs an interactive spaced revision calendar and custom interval engine with real-time Firebase cloud synchronization, AI-driven retention diagnostics, and a gamified WebGL trophy vault.
 
 ---
 
-## 🛠️ Architecture & Tech Stack
+## Key Features
+
+### 1. Spaced Revision Calendar & Agenda
+- **Four-Tier Recall Rating Engine**:
+  - **Again (`1`)**: Resets stage and contracts the interval based on the schedule's lapse retention percentage.
+  - **Hard (`2`)**: Modest spacing growth with increased difficulty weighting.
+  - **Good (`3`)**: Standard interval expansion along your active curve or custom step sequence.
+  - **Easy (`4`)**: Accelerated interval jump with an ease bonus.
+- **Responsive Multi-Viewport Layout**:
+  - **Desktop & Tablet (`768px+`)**: Side-by-side split with the interactive monthly calendar on the left and selected date agenda & session logger on the right, plus a compact top navigation bar.
+  - **Mobile (`<768px`)**: Touch-optimized calendar dots, expandable day inspector, and slide-out navigation drawer with quick actions.
+- **Multi-Category Filtering**: Filter scheduled subjects across Calendar, Subjects, and AI Analytics simultaneously using multi-select category checkboxes.
+
+### 2. Multi-Category Subjects & 12-Color System
+- **Multi-Category Assignment**: Assign one or multiple academic categories to any subject, with primary category designation and inline quick-add category creation inside the subject modal.
+- **12-Color Accent Palette**: Curated 12-color swatch picker (*Indigo, Emerald, Amber, Violet, Rose, Sky, Cyan, Teal, Orange, Fuchsia, Lime, Pink*) available for both **Categories** (create & edit) and **Subjects** (custom override or **Auto** inheritance from the primary category).
+- **Safe Category Deletion**: Removing one category from a multi-category subject preserves the subject under its remaining categories rather than deleting it.
+
+### 3. Custom Revision Schedules & Interval Sequences
+- **4 Built-In Presets**:
+  - *Lucidia Adaptive (SM-2+)*
+  - *Exam Sprint (Aggressive Focus)*
+  - *Long-Term Mastery (Gradual Curve)*
+  - *FSRS Cognitive Decay Model*
+- **Custom Step Interval Sequence (Days)**: Define explicit day ladders (e.g., `1, 3, 7, 14, 30, 60, 120`) with a dedicated **Custom Steps Active** toggle, live parsed stage tags, and an 8-stage progression bar simulator.
+- **Automatic Subject Synchronization**: Editing a schedule or reassigning a subject/category automatically recalculates assigned subjects' active stage intervals and next revision dates anchored to their latest review, and syncs updates to Firestore.
+
+### 4. AI Cognitive Learning Intelligence
+- **7-Day & 14-Day Longitudinal Charts**: Tracks daily revision volume (bars) and recall accuracy percentage (glowing trend line) filtered by one or more categories.
+- **Ebbinghaus Decay Simulator**: Visualizes memory decay curves across consolidation stages ($R = e^{-t/S}$).
+- **Gemini Cognitive Audit (`/api/ai/analyze-progress`)**: Server-side Gemini analysis evaluates subject progress and revision logs to surface cognitive load risk, subject-specific recommendations, and tunable schedule multiplier suggestions.
+
+### 5. Gamified 3D Trophy Vault (Three.js WebGL)
+- **7 Procedural 3D Artifacts**: *The Synaptic Spark*, *The Memory Prism*, *The Chrono Compass*, *The Neuro-Lattice*, *The Feynman Monolith*, *The Polymath Sphere*, and *The Celestial Synapse*.
+- **Synaptic Token Economy**: Earn tokens from logged revisions, streak multipliers, and 30+ day mastery leaps to unlock **5 metallic/crystal finishes** and **4 pedestal styles**.
+- **Interactive Studio Renderer**: Real-time PBR reflections (`RoomEnvironment` + `PMREMGenerator`), `OrbitControls` with camera reset and auto-rotate, and automatic software-GL fallback guarding.
+
+### 6. Cloud Sync & Offline Resilience
+- **Google Sign-In & Firestore Live Sync**: Real-time synchronization for categories, subjects, custom schedules (merged cleanly with built-in presets), and revision logs, backed by `firestore.rules` and `firebase-blueprint.json`.
+- **LocalStorage Fallback**: Seamless offline persistence so schedules and subjects continue working without interruption.
+
+---
+
+## Tech Stack
 
 | Layer | Technologies |
 |---|---|
-| **Frontend Framework** | React 18, TypeScript, Vite |
-| **Styling & Design** | Tailwind CSS, Lucide React Icons |
-| **3D Graphics Engine** | Three.js (`three`), WebGL PBR, OrbitControls |
-| **Backend / Proxy** | Node.js, Express (`server.ts`), tsx |
-| **AI Integration** | Google Gemini API (`@google/genai`) |
-| **Database & Auth** | Firebase Firestore, Firebase Authentication |
+| **Frontend** | React 19, TypeScript, Vite 8 |
+| **Styling & UI** | Tailwind CSS v4, Lucide React Icons, Motion |
+| **3D Graphics** | Three.js (`three`), OrbitControls, RoomEnvironment PBR |
+| **Backend Server** | Node.js, Express 4 (`server.ts`), `tsx` |
+| **AI Integration** | Google GenAI SDK (`@google/genai`) |
+| **Database & Auth** | Firebase Authentication, Cloud Firestore |
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
-├── server.ts                    # Full-stack Express server with Gemini AI API proxy routes
-├── vite.config.ts               # Vite configuration with React plugin and server proxy
-├── metadata.json                # AI Studio application metadata and capabilities
-├── package.json                 # Dependencies and build scripts
-├── src/
-│   ├── main.tsx                 # React entry point
-│   ├── index.css                # Global styles and Tailwind directives
-│   ├── types/
-│   │   └── index.ts             # TypeScript definitions (Subject, Schedule, Achievement, etc.)
-│   ├── services/
-│   │   ├── firebase.ts          # Firebase SDK initialization, Auth, and Firestore sync
-│   │   ├── spacedRepetition.ts  # Ebbinghaus algorithm, stability calculations, and dates
-│   │   ├── gamification.ts      # Token calculations, level tiers, achievements, and shop
-│   │   ├── storage.ts           # LocalStorage fallback persistence
-│   │   └── gemini.ts            # Client-side AI audit calls to backend proxy
-│   └── components/
-│       ├── Header.tsx           # Responsive navigation bar with token pill & user profile
-│       ├── MobileNavDrawer.tsx  # Opaque slide-out mobile drawer with quick actions
-│       ├── RevisionCalendar.tsx # Interactive calendar, tablet side-by-side split, & agenda
-│       ├── SubjectCategoryManager.tsx # Subject & category management with interval presets
-│       ├── CustomScheduleManager.tsx  # Custom spaced interval curve designer
-│       ├── AIStatisticsDashboard.tsx  # Longitudinal 7D/14D charts & Ebbinghaus simulator
-│       ├── TrophyVault3D.tsx    # Three.js 3D Trophy Vault with collapsible control dock
-│       ├── LogSessionModal.tsx  # Session logging modal with live token reward preview
-│       ├── NeuralCanvas.tsx     # Animated particle background effect
-│       └── three/
-│           └── TrophyArtifactMeshes.ts # 7 procedural composite 3D models & PBR materials
+├── server.ts                         # Express server + Vite dev middleware + Gemini API proxy
+├── vite.config.ts                    # Vite React & Tailwind CSS v4 configuration
+├── metadata.json                     # App metadata and capabilities
+├── firebase-blueprint.json           # Firestore schema definitions
+├── firebase-applet-config.json       # Firebase project & Firestore database config
+├── firestore.rules                   # Firestore security rules
+├── package.json                      # Dependencies and npm scripts
+└── src/
+    ├── main.tsx                      # React 19 entry point
+    ├── App.tsx                       # Root state, Firestore sync, & schedule reconciliation
+    ├── index.css                     # Tailwind CSS v4 entry & theme styles
+    ├── types/
+    │   └── index.ts                  # TypeScript interfaces (Subject, Category, Schedule, etc.)
+    ├── services/
+    │   ├── colors.ts                 # 12-color palette & multi-category resolution helpers
+    │   ├── firebase.ts               # Firebase Auth & Firestore real-time sync helpers
+    │   ├── gamification.ts           # Synaptic tokens, level tiers, achievements, & shop
+    │   ├── spacedRepetition.ts       # Spacing engine, simulator, & stage recalculation
+    │   └── storage.ts                # LocalStorage persistence with preset merging
+    └── components/
+        ├── Header.tsx                # Top navigation bar, token counter, & Google Sign-In
+        ├── MobileNavDrawer.tsx       # Slide-out mobile navigation drawer & quick actions
+        ├── MultiCategorySelect.tsx   # Multi-select category filter popover
+        ├── RevisionCalendar.tsx      # Monthly revision calendar & day agenda inspector
+        ├── SubjectCategoryManager.tsx# Subject/category CRUD, 12-color pickers, & filtering
+        ├── CustomScheduleManager.tsx # Schedule editor, custom step ladder, & progression sim
+        ├── AIStatisticsDashboard.tsx # 7D/14D analytics, decay curves, & Gemini cognitive audit
+        ├── TrophyVault3D.tsx         # Interactive Three.js 3D trophy viewer & token shop
+        ├── LogSessionModal.tsx       # Study session logger with interval & token previews
+        ├── NeuralCanvas.tsx          # Subtle animated neural particle backdrop
+        └── three/
+            └── TrophyArtifactMeshes.ts # Procedural 3D artifacts, pedestals, & PBR materials
 ```
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
-- Node.js 18+ and npm installed on your workstation.
-- A Google Gemini API key (set in your environment as `GEMINI_API_KEY`).
+- **Node.js 18+** and **npm**
+- A **Google Gemini API key** (for server-side AI cognitive audits)
 
-### Installation
+### Setup & Commands
 
-1. **Clone or navigate to the workspace**:
-   ```bash
-   git clone <repository-url>
-   cd lucidia
-   ```
-
-2. **Install dependencies**:
+1. **Install dependencies**:
    ```bash
    npm install
    ```
 
-3. **Configure environment variables**:
-   Create a `.env` file based on `.env.example`:
+2. **Configure environment variables**:
+   Copy `.env.example` to `.env` and set your Gemini API key:
    ```bash
    cp .env.example .env
    ```
-   Add your Gemini API key:
    ```env
    GEMINI_API_KEY="your-gemini-api-key-here"
    ```
 
-4. **Start the development server**:
+3. **Run the development server** (Express + Vite on port `3000`):
    ```bash
    npm run dev
    ```
-   The application will be running at [http://localhost:3000](http://localhost:3000).
 
-5. **Build for production**:
+4. **Type-check & lint**:
+   ```bash
+   npm run lint
+   ```
+
+5. **Build & run for production**:
    ```bash
    npm run build
+   npm start
    ```
 
 ---
 
-## 🧮 Mathematical Model: Ebbinghaus Spacing
+## Mathematical Model: Ebbinghaus Retention
 
-The retention probability $R(t)$ at elapsed time $t$ is calculated via:
+Current recall probability $R(t)$ after $t$ elapsed days is modeled as:
 
 $$R(t) = e^{-\frac{t}{S}}$$
 
 Where:
-- $t$: Days elapsed since the previous revision.
-- $S$: Synaptic Stability factor (measured in days). Stability increases with successful retrieval practice.
-- Interval progression dynamically adjusts based on user recall ratings ($q \in \{1, 2, 3, 4\}$):
-  $$I_{n} = I_{n-1} \times \text{Factor}(q, D)$$
-  Where $D$ is the subjective difficulty rating and Factor ranges between $1.2\times$ and $2.5\times$ for sustained retention.
+- $t$: Days elapsed since the subject's most recent revision.
+- $S$: Synaptic stability (in days), updated on each recall evaluation or custom schedule progression.
+- When **Custom Steps** is active, `Good` reviews advance deterministically along your configured `customStepsLadder` ($S_1, S_2, \dots, S_k$) before extrapolating via your interval multiplier up to `maximumInterval`.
 
 ---
 
-## 📄 License
+## License
 
-Distributed under the MIT License. Built with ❤️ for accelerated learning and cognitive mastery.
+MIT License
