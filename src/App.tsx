@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { Category, Subject, RevisionSchedule, RevisionLog, AIAnalysisResult, Rating } from './types';
 import {
@@ -130,6 +130,14 @@ export default function App() {
     return () => unsubscribeAuth();
   }, []);
 
+  // Keep latest refs to avoid stale closures and impure state updaters
+  const subjectsRef = useRef(subjects);
+  subjectsRef.current = subjects;
+  const schedulesRef = useRef(schedules);
+  schedulesRef.current = schedules;
+  const logsRef = useRef(logs);
+  logsRef.current = logs;
+
   // Sync to local storage when state changes (offline & fallback resilience)
   useEffect(() => {
     saveCategories(categories);
@@ -146,6 +154,61 @@ export default function App() {
   useEffect(() => {
     saveRevisionLogs(logs);
   }, [logs]);
+
+  // Reconcile subjects whose assigned custom-step schedule was already updated
+  useEffect(() => {
+    if (subjects.length === 0 || schedules.length === 0) return;
+
+    const updatedList: Subject[] = [];
+    const changedSubjects: Subject[] = [];
+
+    for (const subj of subjects) {
+      if ((subj.revisionStage || 0) < 1) {
+        updatedList.push(subj);
+        continue;
+      }
+      const sched = schedules.find(sc => sc.id === subj.scheduleId);
+      if (!sched) {
+        updatedList.push(subj);
+        continue;
+      }
+      const usesCustomLadder = Boolean(
+        (sched.useCustomSteps || sched.algorithm === 'fixed_intervals') &&
+          sched.customStepsLadder &&
+          sched.customStepsLadder.length > 0
+      );
+      if (!usesCustomLadder) {
+        updatedList.push(subj);
+        continue;
+      }
+
+      // Preserve explicit Hard/Again rating adjustments from the most recent log
+      const latestLog = logs
+        .filter(l => l.subjectId === subj.id)
+        .sort((a, b) => (b.timestamp || b.revisedDate).localeCompare(a.timestamp || a.revisedDate))[0];
+      if (latestLog && (latestLog.rating === 1 || latestLog.rating === 2)) {
+        updatedList.push(subj);
+        continue;
+      }
+
+      const recalculated = recalculateSubjectForSchedule(subj, sched, logs);
+      if (recalculated.intervalDays !== subj.intervalDays || recalculated.nextDueDate !== subj.nextDueDate) {
+        updatedList.push(recalculated);
+        changedSubjects.push(recalculated);
+      } else {
+        updatedList.push(subj);
+      }
+    }
+
+    if (changedSubjects.length > 0) {
+      setSubjects(updatedList);
+      if (user) {
+        for (const ch of changedSubjects) {
+          syncSubject(user.uid, ch);
+        }
+      }
+    }
+  }, [subjects, schedules, logs, user]);
 
   // Compute due subjects
   const todayStr = formatDateToYYYYMMDD(new Date());
@@ -244,17 +307,26 @@ export default function App() {
   // Subject management
   const handleSaveSubject = useCallback(
     (subject: Subject) => {
+      const currentSubjects = subjectsRef.current;
+      const currentSchedules = schedulesRef.current;
+      const currentLogs = logsRef.current;
+
       let subjectToSave = subject;
-      const prevSubject = subjects.find(s => s.id === subject.id);
+      const prevSubject = currentSubjects.find(s => s.id === subject.id);
       if (
         prevSubject &&
-        prevSubject.scheduleId !== subject.scheduleId &&
         prevSubject.nextDueDate === subject.nextDueDate &&
         subject.revisionStage >= 1
       ) {
-        const targetSchedule = schedules.find(sc => sc.id === subject.scheduleId);
+        const targetSchedule = currentSchedules.find(sc => sc.id === subject.scheduleId);
         if (targetSchedule) {
-          subjectToSave = recalculateSubjectForSchedule(subject, targetSchedule, logs);
+          const usesCustom = Boolean(
+            (targetSchedule.useCustomSteps || targetSchedule.algorithm === 'fixed_intervals') &&
+              targetSchedule.customStepsLadder?.length
+          );
+          if (prevSubject.scheduleId !== subject.scheduleId || usesCustom) {
+            subjectToSave = recalculateSubjectForSchedule(subject, targetSchedule, currentLogs);
+          }
         }
       }
 
@@ -268,7 +340,7 @@ export default function App() {
         syncSubject(user.uid, subjectToSave);
       }
     },
-    [user, subjects, schedules, logs]
+    [user]
   );
 
   const handleDeleteSubject = useCallback(
@@ -347,6 +419,9 @@ export default function App() {
   // Schedule management
   const handleSaveSchedule = useCallback(
     (schedule: RevisionSchedule) => {
+      const currentSubjects = subjectsRef.current;
+      const currentLogs = logsRef.current;
+
       setSchedules(prev => {
         const exists = prev.some(s => s.id === schedule.id);
         if (exists) return prev.map(s => (s.id === schedule.id ? schedule : s));
@@ -354,42 +429,58 @@ export default function App() {
       });
 
       // Recalculate all subjects already assigned to this schedule
-      setSubjects(prev =>
-        prev.map(s => {
-          if (s.scheduleId === schedule.id) {
-            const recalculated = recalculateSubjectForSchedule(s, schedule, logs);
-            if (
-              user &&
-              (recalculated.intervalDays !== s.intervalDays || recalculated.nextDueDate !== s.nextDueDate)
-            ) {
-              syncSubject(user.uid, recalculated);
-            }
-            return recalculated;
+      const changedSubjects: Subject[] = [];
+      const nextSubjects = currentSubjects.map(s => {
+        if (s.scheduleId === schedule.id) {
+          const recalculated = recalculateSubjectForSchedule(s, schedule, currentLogs);
+          if (recalculated.intervalDays !== s.intervalDays || recalculated.nextDueDate !== s.nextDueDate) {
+            changedSubjects.push(recalculated);
           }
-          return s;
-        })
-      );
+          return recalculated;
+        }
+        return s;
+      });
+
+      if (changedSubjects.length > 0) {
+        setSubjects(nextSubjects);
+        if (user) {
+          for (const updated of changedSubjects) {
+            syncSubject(user.uid, updated);
+          }
+        }
+      }
 
       if (user) {
         syncSchedule(user.uid, schedule);
       }
     },
-    [user, logs]
+    [user]
   );
 
   const handleDeleteSchedule = useCallback(
     (scheduleId: string) => {
+      const currentSubjects = subjectsRef.current;
       setSchedules(prev => prev.filter(s => s.id !== scheduleId));
-      setSubjects(prev =>
-        prev.map(s => {
-          if (s.scheduleId === scheduleId) {
-            const updated = { ...s, scheduleId: 'lucidia-adaptive' };
-            if (user) syncSubject(user.uid, updated);
-            return updated;
+
+      const changedSubjects: Subject[] = [];
+      const nextSubjects = currentSubjects.map(s => {
+        if (s.scheduleId === scheduleId) {
+          const updated = { ...s, scheduleId: 'lucidia-adaptive' };
+          changedSubjects.push(updated);
+          return updated;
+        }
+        return s;
+      });
+
+      if (changedSubjects.length > 0) {
+        setSubjects(nextSubjects);
+        if (user) {
+          for (const updated of changedSubjects) {
+            syncSubject(user.uid, updated);
           }
-          return s;
-        })
-      );
+        }
+      }
+
       if (user) {
         deleteScheduleDoc(user.uid, scheduleId);
       }
@@ -399,47 +490,65 @@ export default function App() {
 
   const handleAssignScheduleToSubject = useCallback(
     (subjectId: string, scheduleId: string) => {
-      const targetSchedule = schedules.find(sc => sc.id === scheduleId);
-      setSubjects(prev =>
-        prev.map(s => {
-          if (s.id === subjectId) {
-            const withSchedule = { ...s, scheduleId };
-            const updated = targetSchedule
-              ? recalculateSubjectForSchedule(withSchedule, targetSchedule, logs)
-              : withSchedule;
-            if (user) syncSubject(user.uid, updated);
-            return updated;
-          }
-          return s;
-        })
-      );
+      const targetSchedule = schedulesRef.current.find(sc => sc.id === scheduleId);
+      const currentSubjects = subjectsRef.current;
+      const currentLogs = logsRef.current;
+
+      let updatedTarget: Subject | null = null;
+      const nextSubjects = currentSubjects.map(s => {
+        if (s.id === subjectId) {
+          const withSchedule = { ...s, scheduleId };
+          const updated = targetSchedule
+            ? recalculateSubjectForSchedule(withSchedule, targetSchedule, currentLogs)
+            : withSchedule;
+          updatedTarget = updated;
+          return updated;
+        }
+        return s;
+      });
+
+      setSubjects(nextSubjects);
+      if (user && updatedTarget) {
+        syncSubject(user.uid, updatedTarget);
+      }
     },
-    [user, schedules, logs]
+    [user]
   );
 
   const handleAssignScheduleToCategory = useCallback(
     (categoryId: string, scheduleId: string) => {
-      const targetSchedule = schedules.find(sc => sc.id === scheduleId);
-      setSubjects(prev =>
-        prev.map(s => {
-          if (getSubjectCategoryIds(s).includes(categoryId)) {
-            const withSchedule = { ...s, scheduleId };
-            const updated = targetSchedule
-              ? recalculateSubjectForSchedule(withSchedule, targetSchedule, logs)
-              : withSchedule;
-            if (user) syncSubject(user.uid, updated);
-            return updated;
+      const targetSchedule = schedulesRef.current.find(sc => sc.id === scheduleId);
+      const currentSubjects = subjectsRef.current;
+      const currentLogs = logsRef.current;
+
+      const updatedSubjects: Subject[] = [];
+      const nextSubjects = currentSubjects.map(s => {
+        if (getSubjectCategoryIds(s).includes(categoryId)) {
+          const withSchedule = { ...s, scheduleId };
+          const updated = targetSchedule
+            ? recalculateSubjectForSchedule(withSchedule, targetSchedule, currentLogs)
+            : withSchedule;
+          updatedSubjects.push(updated);
+          return updated;
+        }
+        return s;
+      });
+
+      if (updatedSubjects.length > 0) {
+        setSubjects(nextSubjects);
+        if (user) {
+          for (const updated of updatedSubjects) {
+            syncSubject(user.uid, updated);
           }
-          return s;
-        })
-      );
+        }
+      }
     },
-    [user, schedules, logs]
+    [user]
   );
 
   const handleApplyScheduleRecommendation = useCallback(
     (multiplier: number, targetRetention: number) => {
-      const baseSchedule = schedules[0];
+      const baseSchedule = schedulesRef.current[0];
       if (!baseSchedule) return;
       const updatedSchedule: RevisionSchedule = {
         ...baseSchedule,
@@ -449,7 +558,7 @@ export default function App() {
       handleSaveSchedule(updatedSchedule);
       setActiveTab('schedules');
     },
-    [schedules, handleSaveSchedule]
+    [handleSaveSchedule]
   );
 
   // AI Cognitive Audit

@@ -597,6 +597,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                           {subject.categoryNames && subject.categoryNames.length > 0
                             ? subject.categoryNames.join(', ')
                             : subject.categoryName}
+                          {' · '}Stage {subject.revisionStage} ({subject.intervalDays}d)
                         </div>
                       </div>
 

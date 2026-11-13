@@ -403,6 +403,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
             filteredSubjects.map(subject => {
               const subjectCats = getSubjectCategories(subject, categories);
               const subjectAccent = getSubjectColor(subject, categories);
+              const assignedSchedule = schedules.find(s => s.id === subject.scheduleId);
               const isDue = subject.nextDueDate <= todayStr;
 
               return (
@@ -426,6 +427,11 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
                               {cat.name}
                             </span>
                           ))}
+                          {assignedSchedule && (
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-slate-700/80 bg-slate-900/90 text-slate-400">
+                              {assignedSchedule.name}
+                            </span>
+                          )}
                         </div>
                         <h3 className="text-base font-bold text-slate-100 leading-snug flex items-center gap-2">
                           <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getDotColorClass(subjectAccent)}`} />
