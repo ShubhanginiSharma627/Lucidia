@@ -1,4 +1,4 @@
-import { Subject, Rating, RevisionSchedule } from '../types';
+import { Subject, Rating, RevisionSchedule, RevisionLog } from '../types';
 
 export const PRESET_SCHEDULES: RevisionSchedule[] = [
   {
@@ -32,6 +32,7 @@ export const PRESET_SCHEDULES: RevisionSchedule[] = [
     lapseResetPercentage: 0,
     maximumInterval: 60,
     targetRetention: 0.95,
+    useCustomSteps: true,
     customStepsLadder: [1, 2, 4, 7, 12, 20, 35, 60],
   },
   {
@@ -106,10 +107,18 @@ export function calculateNextSubjectRevision(
   schedule: RevisionSchedule,
   baseDate: Date = new Date()
 ): SubjectCalculationResult {
-  let newStage = subject.revisionStage || 0;
+  const currentStage = subject.revisionStage || 0;
+  let newStage = currentStage;
   let newInterval = subject.intervalDays || 1;
   let newStability = subject.stability || 1;
   let newDifficulty = subject.difficulty || 5;
+
+  const hasCustomLadder = Boolean(
+    (schedule.useCustomSteps || schedule.algorithm === 'fixed_intervals') &&
+      schedule.customStepsLadder &&
+      schedule.customStepsLadder.length > 0
+  );
+  const ladder = schedule.customStepsLadder || [];
 
   if (rating === 1) {
     // Again (Lapse / Reset)
@@ -120,13 +129,17 @@ export function calculateNextSubjectRevision(
     if (schedule.lapseResetPercentage > 0 && subject.intervalDays > 2) {
       newInterval = Math.max(1, Math.round(subject.intervalDays * (schedule.lapseResetPercentage / 100)));
     } else {
-      newInterval = 1;
+      newInterval = hasCustomLadder ? Math.max(1, Math.round(ladder[0])) : 1;
     }
   } else if (rating === 2) {
     // Hard
     newDifficulty = Math.min(10, newDifficulty + 0.3);
     newStage = Math.max(0, newStage + 1);
-    if (newInterval <= 1) {
+    if (hasCustomLadder) {
+      const idx = Math.min(ladder.length - 1, Math.max(0, currentStage));
+      const baseStep = ladder[idx] || newInterval;
+      newInterval = Math.max(1, Math.round(baseStep * schedule.hardPenalty));
+    } else if (newInterval <= 1) {
       newInterval = 2;
     } else {
       newInterval = Math.max(1, Math.round(newInterval * schedule.hardPenalty));
@@ -134,19 +147,20 @@ export function calculateNextSubjectRevision(
     newStability = Math.max(1, newStability * 1.15);
   } else if (rating === 3) {
     // Good
-    newStage += 1;
+    newStage = currentStage + 1;
     newDifficulty = Math.max(1, newDifficulty - 0.1);
 
-    if (schedule.algorithm === 'fixed_intervals' && schedule.customStepsLadder && schedule.customStepsLadder.length > 0) {
-      const ladder = schedule.customStepsLadder;
-      const currentIdx = ladder.findIndex(step => step >= newInterval);
-      if (currentIdx === -1 || currentIdx >= ladder.length - 1) {
-        newInterval = Math.min(schedule.maximumInterval, Math.round(newInterval * schedule.intervalMultiplier));
+    if (hasCustomLadder) {
+      const stepIdx = newStage - 1; // Stage 1 -> ladder[0], Stage 2 -> ladder[1], etc.
+      if (stepIdx < ladder.length) {
+        newInterval = Math.max(1, Math.round(ladder[stepIdx]));
       } else {
-        newInterval = ladder[currentIdx + 1];
+        const lastStep = ladder[ladder.length - 1] || newInterval;
+        const basePrev = Math.max(newInterval, lastStep);
+        newInterval = Math.min(schedule.maximumInterval, Math.max(basePrev + 1, Math.round(basePrev * schedule.intervalMultiplier)));
       }
     } else {
-      if (newInterval <= 1) {
+      if (currentStage === 0 && newInterval <= 1) {
         newInterval = schedule.graduatingInterval || 2;
       } else {
         const retentionFactor = Math.log(schedule.targetRetention) / Math.log(0.9);
@@ -157,14 +171,21 @@ export function calculateNextSubjectRevision(
     newStability = newInterval;
   } else if (rating === 4) {
     // Easy
-    newStage += 2;
+    newStage = currentStage + 2;
     newDifficulty = Math.max(1, newDifficulty - 0.5);
 
-    if (schedule.algorithm === 'fixed_intervals' && schedule.customStepsLadder && schedule.customStepsLadder.length > 0) {
-      const ladder = schedule.customStepsLadder;
-      const currentIdx = ladder.findIndex(step => step >= newInterval);
-      const targetIdx = Math.min(ladder.length - 1, (currentIdx === -1 ? ladder.length - 1 : currentIdx + 2));
-      newInterval = ladder[targetIdx];
+    if (hasCustomLadder) {
+      const stepIdx = newStage - 1;
+      if (stepIdx < ladder.length) {
+        newInterval = Math.max(1, Math.round(ladder[stepIdx]));
+      } else {
+        const lastStep = ladder[ladder.length - 1] || newInterval;
+        const basePrev = Math.max(newInterval, lastStep);
+        newInterval = Math.min(
+          schedule.maximumInterval,
+          Math.max(basePrev + 2, Math.round(basePrev * schedule.intervalMultiplier * schedule.easyBonus))
+        );
+      }
     } else {
       const multiplier = schedule.intervalMultiplier * schedule.easyBonus;
       newInterval = Math.max(newInterval + 2, Math.round(newInterval * multiplier));
@@ -242,4 +263,55 @@ export function simulateScheduleProgression(schedule: RevisionSchedule, steps: n
   }
 
   return results;
+}
+
+/**
+ * Recalculates a subject's current stage interval and nextDueDate when its assigned
+ * RevisionSchedule is updated or newly assigned.
+ */
+export function recalculateSubjectForSchedule(
+  subject: Subject,
+  schedule: RevisionSchedule,
+  logs: RevisionLog[] = []
+): Subject {
+  const stage = subject.revisionStage || 0;
+  if (stage < 1) {
+    return subject;
+  }
+
+  const progression = simulateScheduleProgression(schedule, stage);
+  const stageStep = progression[stage - 1];
+  if (!stageStep) {
+    return subject;
+  }
+
+  const newIntervalDays = stageStep.intervalDays;
+
+  const subjectLogs = logs
+    .filter(l => l.subjectId === subject.id && l.revisedDate)
+    .sort((a, b) => (b.timestamp || b.revisedDate).localeCompare(a.timestamp || a.revisedDate));
+
+  let anchorDate: Date;
+  if (subjectLogs.length > 0) {
+    anchorDate = new Date(subjectLogs[0].revisedDate + 'T00:00:00');
+  } else if (subject.lastRevisedAt) {
+    const parsedLast = new Date(subject.lastRevisedAt);
+    anchorDate = new Date(parsedLast.getFullYear(), parsedLast.getMonth(), parsedLast.getDate());
+  } else {
+    const currentDue = new Date(subject.nextDueDate + 'T00:00:00');
+    anchorDate = new Date(currentDue.getTime() - (subject.intervalDays || 1) * 24 * 60 * 60 * 1000);
+  }
+
+  const nextDueDate = formatDateToYYYYMMDD(
+    new Date(anchorDate.getTime() + newIntervalDays * 24 * 60 * 60 * 1000)
+  );
+  const status: Subject['status'] = newIntervalDays >= 45 ? 'mastered' : 'scheduled';
+
+  return {
+    ...subject,
+    intervalDays: newIntervalDays,
+    stability: Number(newIntervalDays.toFixed(1)),
+    nextDueDate,
+    status,
+  };
 }

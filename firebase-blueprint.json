@@ -23,6 +23,9 @@
         "name": { "type": "string", "maxLength": 150 },
         "categoryId": { "type": "string", "maxLength": 128 },
         "categoryName": { "type": "string", "maxLength": 100 },
+        "categoryIds": { "type": "array" },
+        "categoryNames": { "type": "array" },
+        "color": { "type": "string", "maxLength": 30 },
         "scheduleId": { "type": "string", "maxLength": 128 },
         "revisionStage": { "type": "number" },
         "intervalDays": { "type": "number" },
@@ -55,6 +58,7 @@
         "hardPenalty": { "type": "number" },
         "lapseResetPercentage": { "type": "number" },
         "maximumInterval": { "type": "number" },
+        "useCustomSteps": { "type": "boolean" },
         "customStepsLadder": { "type": "array" },
         "userId": { "type": "string", "maxLength": 128 },
         "createdAt": { "type": "string", "maxLength": 64 }

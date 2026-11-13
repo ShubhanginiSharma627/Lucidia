@@ -96,14 +96,24 @@ export async function logOut(): Promise<void> {
   await signOut(auth);
 }
 
+function stripUndefined<T extends Record<string, unknown>>(data: T): T {
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned as T;
+}
+
 // Firestore Realtime Synchronization
 export async function syncCategory(userId: string, category: Category): Promise<void> {
   const path = `users/${userId}/categories`;
   try {
-    await setDoc(doc(db, path, category.id), {
+    await setDoc(doc(db, path, category.id), stripUndefined({
       ...category,
       userId,
-    });
+    }));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${path}/${category.id}`);
   }
@@ -121,10 +131,10 @@ export async function deleteCategoryDoc(userId: string, categoryId: string): Pro
 export async function syncSubject(userId: string, subject: Subject): Promise<void> {
   const path = `users/${userId}/subjects`;
   try {
-    await setDoc(doc(db, path, subject.id), {
+    await setDoc(doc(db, path, subject.id), stripUndefined({
       ...subject,
       userId,
-    });
+    }));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${path}/${subject.id}`);
   }
@@ -142,10 +152,10 @@ export async function deleteSubjectDoc(userId: string, subjectId: string): Promi
 export async function syncSchedule(userId: string, schedule: RevisionSchedule): Promise<void> {
   const path = `users/${userId}/schedules`;
   try {
-    await setDoc(doc(db, path, schedule.id), {
+    await setDoc(doc(db, path, schedule.id), stripUndefined({
       ...schedule,
       userId,
-    });
+    }));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${path}/${schedule.id}`);
   }
@@ -163,10 +173,10 @@ export async function deleteScheduleDoc(userId: string, scheduleId: string): Pro
 export async function syncLog(userId: string, log: RevisionLog): Promise<void> {
   const path = `users/${userId}/logs`;
   try {
-    await setDoc(doc(db, path, log.id), {
+    await setDoc(doc(db, path, log.id), stripUndefined({
       ...log,
       userId,
-    });
+    }));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, `${path}/${log.id}`);
   }

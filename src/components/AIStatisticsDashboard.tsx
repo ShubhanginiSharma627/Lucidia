@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Subject, Category, RevisionLog, RevisionSchedule, AIAnalysisResult } from '../types';
-import { calculateCurrentRetention, formatInterval } from '../services/spacedRepetition';
-import { Brain, Sparkles, TrendingUp, Target, ShieldCheck, Zap, Layers, Clock, ArrowRight } from 'lucide-react';
+import { calculateCurrentRetention } from '../services/spacedRepetition';
+import { MultiCategorySelect, subjectMatchesCategories } from './MultiCategorySelect';
+import { getSubjectCategoryIds, getDotColorClass } from '../services/colors';
+import { Brain, Sparkles, TrendingUp, Target, ShieldCheck, Zap, Layers, Clock } from 'lucide-react';
 
 interface AIStatisticsDashboardProps {
   subjects: Subject[];
@@ -24,15 +26,15 @@ export const AIStatisticsDashboard: React.FC<AIStatisticsDashboardProps> = ({
   isAnalyzing,
   onApplyScheduleRecommendation,
 }) => {
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
 
-  const filteredSubjects = selectedCategoryFilter === 'all'
-    ? subjects
-    : subjects.filter(s => s.categoryId === selectedCategoryFilter);
+  const filteredSubjects = subjects.filter(s => subjectMatchesCategories(s, selectedCategoryIds));
+  const filteredSubjectIdSet = new Set(filteredSubjects.map(s => s.id));
 
-  const filteredLogs = selectedCategoryFilter === 'all'
-    ? logs
-    : logs.filter(l => l.categoryId === selectedCategoryFilter);
+  const filteredLogs = logs.filter(l => {
+    if (selectedCategoryIds.length === 0 || selectedCategoryIds.includes('all')) return true;
+    return filteredSubjectIdSet.has(l.subjectId) || selectedCategoryIds.includes(l.categoryId);
+  });
 
   const totalSubjects = filteredSubjects.length;
   const masteredSubjects = filteredSubjects.filter(s => s.intervalDays >= 30).length;
@@ -98,25 +100,20 @@ export const AIStatisticsDashboard: React.FC<AIStatisticsDashboardProps> = ({
         </div>
 
         <div className="relative z-10 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 shrink-0">
-          <select
-            value={selectedCategoryFilter}
-            onChange={e => setSelectedCategoryFilter(e.target.value)}
-            className="min-h-[44px] px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-medium text-slate-200 focus:outline-none focus:border-indigo-500"
-          >
-            <option value="all">All Categories ({subjects.length})</option>
-            {categories.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <MultiCategorySelect
+            categories={categories}
+            selectedCategoryIds={selectedCategoryIds}
+            onChange={setSelectedCategoryIds}
+            subjects={subjects}
+            align="right"
+          />
 
           <button
             onClick={onRefreshAIAnalysis}
             disabled={isAnalyzing}
-            className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800/50 rounded-xl shadow-sm transition-all active:scale-[0.98]"
+            className="min-h-[40px] flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800/50 rounded-xl shadow-sm transition-all whitespace-nowrap shrink-0 active:scale-[0.98]"
           >
-            <Sparkles className={`w-3.5 h-3.5 ${isAnalyzing ? 'animate-spin' : ''}`} />
+            <Sparkles className={`w-3.5 h-3.5 shrink-0 ${isAnalyzing ? 'animate-spin' : ''}`} />
             <span>{isAnalyzing ? 'Analyzing Retention Patterns...' : 'Run Cognitive Audit'}</span>
           </button>
         </div>
@@ -588,14 +585,17 @@ export const AIStatisticsDashboard: React.FC<AIStatisticsDashboardProps> = ({
 
             <div className="space-y-3">
               {categories.map(cat => {
-                const subsInCat = subjects.filter(s => s.categoryId === cat.id);
+                const subsInCat = subjects.filter(s => getSubjectCategoryIds(s).includes(cat.id));
                 const masteredInCat = subsInCat.filter(s => s.intervalDays >= 30).length;
                 const ratio = subsInCat.length > 0 ? (masteredInCat / subsInCat.length) * 100 : 0;
 
                 return (
                   <div key={cat.id} className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl space-y-2">
                     <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-slate-200">{cat.name}</span>
+                      <span className="font-semibold text-slate-200 flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${getDotColorClass(cat.color)}`} />
+                        <span>{cat.name}</span>
+                      </span>
                       <span className="font-mono text-emerald-400">{Math.round(ratio)}% mastered</span>
                     </div>
 

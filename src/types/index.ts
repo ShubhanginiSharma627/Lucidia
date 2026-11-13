@@ -3,7 +3,7 @@ export type Rating = 1 | 2 | 3 | 4; // 1: Again (Lapsed), 2: Hard, 3: Good, 4: E
 export interface Category {
   id: string;
   name: string;
-  color: string; // indigo, emerald, amber, violet, rose, sky
+  color: string; // indigo, emerald, amber, violet, rose, sky, cyan, teal, orange, fuchsia, lime, pink
   description: string;
   userId?: string;
   createdAt: string;
@@ -12,8 +12,11 @@ export interface Category {
 export interface Subject {
   id: string;
   name: string;
-  categoryId: string;
+  categoryId: string; // Primary category
   categoryName: string;
+  categoryIds?: string[]; // Multiple categories support
+  categoryNames?: string[];
+  color?: string; // Optional subject-level accent color override
   scheduleId: string;
   revisionStage: number; // e.g. 0, 1, 2, 3...
   intervalDays: number;
@@ -42,6 +45,7 @@ export interface RevisionSchedule {
   lapseResetPercentage: number; // % of interval preserved on lapse
   maximumInterval: number; // in days
   targetRetention: number; // e.g. 0.90
+  useCustomSteps?: boolean; // When true, progression strictly follows customStepsLadder
   customStepsLadder?: number[]; // custom sequence of days e.g. [1, 3, 7, 14, 30, 60, 120]
   userId?: string;
   createdAt?: string;

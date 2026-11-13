@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { Subject, Category, RevisionLog, RevisionSchedule } from '../types';
 import { formatDateToYYYYMMDD, formatInterval } from '../services/spacedRepetition';
+import { MultiCategorySelect, subjectMatchesCategories } from './MultiCategorySelect';
+import { getColorClasses, getDotColorClass, getSubjectColor, getSubjectCategories } from '../services/colors';
 import {
   ChevronLeft,
   ChevronRight,
@@ -32,16 +34,15 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
 }) => {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string>(() => formatDateToYYYYMMDD(new Date()));
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
 
   const todayStr = formatDateToYYYYMMDD(new Date());
 
-  // Filter subjects by category if chosen
+  // Filter subjects by chosen multiple categories
   const filteredSubjects = useMemo(() => {
-    if (selectedCategoryFilter === 'all') return subjects;
-    return subjects.filter(s => s.categoryId === selectedCategoryFilter);
-  }, [subjects, selectedCategoryFilter]);
+    return subjects.filter(s => subjectMatchesCategories(s, selectedCategoryIds));
+  }, [subjects, selectedCategoryIds]);
 
   // Year and Month
   const year = currentDate.getFullYear();
@@ -116,38 +117,11 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
     return logs.filter(l => l.revisedDate === selectedDateStr);
   }, [logs, selectedDateStr]);
 
-  // Map category ID to color
-  const categoryColorMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    categories.forEach(c => {
-      map[c.id] = c.color || 'indigo';
-    });
-    return map;
-  }, [categories]);
-
-  const getColorClasses = (color: string) => {
-    switch (color) {
-      case 'emerald':
-        return 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300';
-      case 'amber':
-        return 'bg-amber-500/15 border-amber-500/30 text-amber-300';
-      case 'violet':
-        return 'bg-violet-500/15 border-violet-500/30 text-violet-300';
-      case 'rose':
-        return 'bg-rose-500/15 border-rose-500/30 text-rose-300';
-      case 'sky':
-        return 'bg-sky-500/15 border-sky-500/30 text-sky-300';
-      case 'indigo':
-      default:
-        return 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300';
-    }
-  };
-
   return (
     <div className="w-full max-w-7xl mx-auto px-3 sm:px-5 lg:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6 overflow-hidden">
       {/* Top Controls Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        <div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-1 flex items-center gap-2 sm:gap-2.5">
             <CalendarIcon className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400 shrink-0" />
             <span>Spaced Revision Calendar</span>
@@ -157,27 +131,19 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          {/* Category Filter */}
-          <div className="flex items-center gap-1.5 flex-1 sm:flex-none">
-            <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-            <select
-              value={selectedCategoryFilter}
-              onChange={e => setSelectedCategoryFilter(e.target.value)}
-              className="w-full sm:w-auto min-h-[40px] px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs font-medium text-slate-200 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="all">All Categories ({subjects.length})</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="flex items-center gap-2.5 flex-nowrap shrink-0 self-start md:self-auto">
+          {/* Multi-Category Filter */}
+          <MultiCategorySelect
+            categories={categories}
+            selectedCategoryIds={selectedCategoryIds}
+            onChange={setSelectedCategoryIds}
+            subjects={subjects}
+            align="right"
+          />
 
           <button
             onClick={() => onOpenAddSubject(selectedDateStr)}
-            className="min-h-[40px] flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all whitespace-nowrap active:scale-[0.98]"
+            className="min-h-[40px] flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all whitespace-nowrap shrink-0 active:scale-[0.98]"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Subject</span>
@@ -296,23 +262,11 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
                     {/* Mobile: compact colored dots */}
                     <div className="flex sm:hidden flex-wrap gap-1 mt-1 justify-center">
                       {daySubjects.slice(0, 3).map(sub => {
-                        const color = categoryColorMap[sub.categoryId] || 'indigo';
+                        const color = getSubjectColor(sub, categories);
                         return (
                           <span
                             key={sub.id}
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              color === 'emerald'
-                                ? 'bg-emerald-400'
-                                : color === 'amber'
-                                ? 'bg-amber-400'
-                                : color === 'violet'
-                                ? 'bg-violet-400'
-                                : color === 'rose'
-                                ? 'bg-rose-400'
-                                : color === 'sky'
-                                ? 'bg-sky-400'
-                                : 'bg-indigo-400'
-                            }`}
+                            className={`w-1.5 h-1.5 rounded-full ${getDotColorClass(color)}`}
                           />
                         );
                       })}
@@ -324,12 +278,13 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
                     {/* Tablet & Desktop: detailed label chips */}
                     <div className="hidden sm:block space-y-1">
                       {daySubjects.slice(0, 2).map(sub => {
-                        const color = categoryColorMap[sub.categoryId] || 'indigo';
+                        const color = getSubjectColor(sub, categories);
+                        const catNames = getSubjectCategories(sub, categories).map(c => c.name).join(', ');
                         return (
                           <div
                             key={sub.id}
                             className={`text-[10px] font-medium px-1.5 py-0.5 rounded border truncate ${getColorClasses(color)}`}
-                            title={`${sub.name} (${sub.categoryName})`}
+                            title={`${sub.name} (${catNames})`}
                           >
                             {sub.name}
                           </div>
@@ -406,7 +361,8 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
               ) : (
                 <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
                   {selectedDaySubjects.map(subject => {
-                    const color = categoryColorMap[subject.categoryId] || 'indigo';
+                    const subjectCats = getSubjectCategories(subject, categories);
+                    const subjectAccent = getSubjectColor(subject, categories);
                     const schedule = schedules.find(s => s.id === subject.scheduleId);
 
                     return (
@@ -416,11 +372,19 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border inline-block mb-1 ${getColorClasses(color)}`}>
-                              {subject.categoryName}
-                            </span>
-                            <h4 className="text-xs font-semibold text-slate-100 leading-snug">
-                              {subject.name}
+                            <div className="flex flex-wrap items-center gap-1 mb-1.5">
+                              {subjectCats.map(cat => (
+                                <span
+                                  key={cat.id}
+                                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border inline-block ${getColorClasses(cat.color)}`}
+                                >
+                                  {cat.name}
+                                </span>
+                              ))}
+                            </div>
+                            <h4 className="text-xs font-semibold text-slate-100 leading-snug flex items-center gap-1.5">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${getDotColorClass(subjectAccent)}`} />
+                              <span>{subject.name}</span>
                             </h4>
                           </div>
                         </div>

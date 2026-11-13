@@ -67,7 +67,19 @@ export function getSchedules(): RevisionSchedule[] {
       saveSchedules(PRESET_SCHEDULES);
       return PRESET_SCHEDULES;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw) as RevisionSchedule[];
+    const mergedMap = new Map<string, RevisionSchedule>();
+    for (const preset of PRESET_SCHEDULES) {
+      mergedMap.set(preset.id, preset);
+    }
+    if (Array.isArray(parsed)) {
+      for (const sched of parsed) {
+        if (sched && sched.id) {
+          mergedMap.set(sched.id, sched);
+        }
+      }
+    }
+    return Array.from(mergedMap.values());
   } catch {
     return PRESET_SCHEDULES;
   }

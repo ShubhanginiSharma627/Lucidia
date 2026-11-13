@@ -1,7 +1,16 @@
 import React, { useState } from 'react';
 import { Subject, Category, RevisionSchedule } from '../types';
 import { formatInterval, formatDateToYYYYMMDD } from '../services/spacedRepetition';
-import { Plus, Search, Filter, BookOpen, Trash2, Edit3, Check, Layers, Clock, AlertCircle } from 'lucide-react';
+import { subjectMatchesCategories } from './MultiCategorySelect';
+import {
+  COLOR_PALETTE,
+  getColorClasses,
+  getDotColorClass,
+  getSubjectCategoryIds,
+  getSubjectCategories,
+  getSubjectColor,
+} from '../services/colors';
+import { Plus, Search, BookOpen, Trash2, Edit3, Check } from 'lucide-react';
 
 interface SubjectCategoryManagerProps {
   categories: Category[];
@@ -28,7 +37,8 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
   isAddModalOpenInitially = false,
   preselectedDateForNew,
 }) => {
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [selectedSubjectCategoryIds, setSelectedSubjectCategoryIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'due' | 'mastered'>('all');
 
@@ -45,6 +55,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
   const [subjectForm, setSubjectForm] = useState<Partial<Subject>>({
     name: '',
     categoryId: categories[0]?.id || '',
+    categoryIds: categories[0]?.id ? [categories[0].id] : [],
     scheduleId: schedules[0]?.id || 'lucidia-adaptive',
     nextDueDate: preselectedDateForNew || formatDateToYYYYMMDD(new Date()),
     notes: '',
@@ -52,10 +63,10 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
 
   const todayStr = formatDateToYYYYMMDD(new Date());
 
-  // Filtered Subjects
+  // Filtered Subjects (supports multi-category selection)
   const filteredSubjects = subjects.filter(subject => {
-    // Category filter
-    if (selectedCategoryFilter !== 'all' && subject.categoryId !== selectedCategoryFilter) {
+    // Multi-Category filter
+    if (!subjectMatchesCategories(subject, selectedCategoryIds)) {
       return false;
     }
 
@@ -67,12 +78,15 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
       return false;
     }
 
-    // Search query
+  // Search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
+      const catNamesJoined = getSubjectCategories(subject, categories)
+        .map(c => c.name.toLowerCase())
+        .join(' ');
       return (
         subject.name.toLowerCase().includes(q) ||
-        subject.categoryName.toLowerCase().includes(q) ||
+        catNamesJoined.includes(q) ||
         (subject.notes || '').toLowerCase().includes(q)
       );
     }
@@ -80,31 +94,16 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
     return true;
   });
 
-  // Category Colors
-  const getColorClasses = (color: string) => {
-    switch (color) {
-      case 'emerald':
-        return 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300';
-      case 'amber':
-        return 'bg-amber-500/15 border-amber-500/30 text-amber-300';
-      case 'violet':
-        return 'bg-violet-500/15 border-violet-500/30 text-violet-300';
-      case 'rose':
-        return 'bg-rose-500/15 border-rose-500/30 text-rose-300';
-      case 'sky':
-        return 'bg-sky-500/15 border-sky-500/30 text-sky-300';
-      case 'indigo':
-      default:
-        return 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300';
-    }
-  };
-
   const handleOpenNewSubject = () => {
+    const defaultCatId = categories[0]?.id || '';
     setSubjectForm({
       id: `subj-${Date.now()}`,
       name: '',
-      categoryId: categories[0]?.id || '',
+      categoryId: defaultCatId,
       categoryName: categories[0]?.name || '',
+      categoryIds: defaultCatId ? [defaultCatId] : [],
+      categoryNames: categories[0]?.name ? [categories[0].name] : [],
+      color: undefined,
       scheduleId: schedules[0]?.id || 'lucidia-adaptive',
       revisionStage: 0,
       intervalDays: 1,
@@ -115,47 +114,100 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
       notes: '',
       createdAt: new Date().toISOString(),
     });
+    setSelectedSubjectCategoryIds(defaultCatId ? [defaultCatId] : []);
+    setNewCategoryInline('');
+    setNewCategoryInlineColor('indigo');
     setIsSubjectModalOpen(true);
   };
 
   const [newCategoryInline, setNewCategoryInline] = useState('');
+  const [newCategoryInlineColor, setNewCategoryInlineColor] = useState('indigo');
 
   const handleEditSubject = (subj: Subject) => {
     setSubjectForm({ ...subj });
+    const initialCats = getSubjectCategoryIds(subj);
+    setSelectedSubjectCategoryIds(initialCats);
     setNewCategoryInline('');
     setIsSubjectModalOpen(true);
+  };
+
+  const handleEditCategory = (cat: Category) => {
+    setCategoryForm({ ...cat });
+    setIsCategoryModalOpen(true);
+  };
+
+  const handleToggleSubjectCategory = (catId: string) => {
+    if (selectedSubjectCategoryIds.includes(catId)) {
+      setSelectedSubjectCategoryIds(prev => prev.filter(id => id !== catId));
+    } else {
+      setSelectedSubjectCategoryIds(prev => [...prev, catId]);
+    }
+  };
+
+  const handleInlineAddCategory = () => {
+    const trimmed = newCategoryInline.trim();
+    if (!trimmed) return;
+    const existing = categories.find(c => c.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      if (!selectedSubjectCategoryIds.includes(existing.id)) {
+        setSelectedSubjectCategoryIds(prev => [...prev, existing.id]);
+      }
+      setNewCategoryInline('');
+      return;
+    }
+    const newCat: Category = {
+      id: `cat-${Date.now()}`,
+      name: trimmed,
+      color: newCategoryInlineColor || 'indigo',
+      description: '',
+      createdAt: new Date().toISOString(),
+    };
+    onSaveCategory(newCat);
+    setSelectedSubjectCategoryIds(prev => [...prev, newCat.id]);
+    setNewCategoryInline('');
   };
 
   const handleSaveSubjectSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!subjectForm.name) return;
 
-    let targetCatId = subjectForm.categoryId;
-    let targetCatName = '';
+    let targetCatIds = [...selectedSubjectCategoryIds];
+    let targetCatNames: string[] = [];
 
-    if (!targetCatId && newCategoryInline.trim()) {
+    if (newCategoryInline.trim()) {
+      const trimmed = newCategoryInline.trim();
       const newCat: Category = {
         id: `cat-${Date.now()}`,
-        name: newCategoryInline.trim(),
-        color: 'indigo',
+        name: trimmed,
+        color: newCategoryInlineColor || 'indigo',
         description: '',
         createdAt: new Date().toISOString(),
       };
       onSaveCategory(newCat);
-      targetCatId = newCat.id;
-      targetCatName = newCat.name;
+      targetCatIds = [...targetCatIds, newCat.id];
+      targetCatNames = targetCatIds.map(id => (id === newCat.id ? newCat.name : categories.find(c => c.id === id)?.name || '')).filter(Boolean);
     } else {
-      const matchedCat = categories.find(c => c.id === targetCatId);
-      targetCatName = matchedCat?.name || 'General';
+      targetCatNames = targetCatIds.map(id => categories.find(c => c.id === id)?.name).filter(Boolean) as string[];
     }
 
-    if (!targetCatId) return;
+    if (targetCatIds.length === 0 && categories[0]) {
+      targetCatIds = [categories[0].id];
+      targetCatNames = [categories[0].name];
+    }
+
+    if (targetCatIds.length === 0) return;
+
+    const primaryCatId = targetCatIds[0];
+    const primaryCatName = targetCatNames[0] || 'General';
 
     const saved: Subject = {
       id: subjectForm.id || `subj-${Date.now()}`,
       name: subjectForm.name,
-      categoryId: targetCatId,
-      categoryName: targetCatName,
+      categoryId: primaryCatId,
+      categoryName: primaryCatName,
+      categoryIds: targetCatIds,
+      categoryNames: targetCatNames,
+      color: subjectForm.color || undefined,
       scheduleId: subjectForm.scheduleId || schedules[0]?.id || 'lucidia-adaptive',
       revisionStage: subjectForm.revisionStage ?? 0,
       intervalDays: subjectForm.intervalDays ?? 1,
@@ -192,10 +244,10 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5 sm:space-y-8">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        <div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-1 flex items-center gap-2">
-            <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400" />
+            <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400 shrink-0" />
             <span>Academic Categories & Subjects</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
@@ -203,7 +255,7 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-nowrap shrink-0 self-stretch sm:self-start md:self-auto">
           <button
             onClick={() => {
               setCategoryForm({
@@ -213,61 +265,83 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
               });
               setIsCategoryModalOpen(true);
             }}
-            className="flex-1 sm:flex-none min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-200 bg-slate-900 hover:bg-slate-850 border border-slate-700 rounded-xl transition-colors active:scale-[0.98]"
+            className="flex-1 sm:flex-none min-h-[42px] flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-200 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl transition-colors whitespace-nowrap shrink-0 active:scale-[0.98]"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5 shrink-0" />
             <span>New Category</span>
           </button>
 
           <button
             onClick={handleOpenNewSubject}
-            className="flex-1 sm:flex-none min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all active:scale-[0.98]"
+            className="flex-1 sm:flex-none min-h-[42px] flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all whitespace-nowrap shrink-0 active:scale-[0.98]"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5 shrink-0" />
             <span>New Subject</span>
           </button>
         </div>
       </div>
 
-      {/* Categories Horizontal Scroller / Filter Bar */}
+      {/* Categories Horizontal Scroller / Multi-Category Filter Bar */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
         <button
-          onClick={() => setSelectedCategoryFilter('all')}
-          className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 border ${
-            selectedCategoryFilter === 'all'
+          onClick={() => setSelectedCategoryIds([])}
+          className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 border flex items-center gap-1.5 ${
+            selectedCategoryIds.length === 0
               ? 'bg-indigo-600 text-white border-indigo-500 shadow-sm'
               : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-white'
           }`}
         >
-          All Categories ({subjects.length})
+          {selectedCategoryIds.length === 0 && <Check className="w-3 h-3" />}
+          <span>All Categories</span>
+          <span className="text-[11px] font-mono opacity-80">({subjects.length})</span>
         </button>
 
         {categories.map(cat => {
-          const isSelected = selectedCategoryFilter === cat.id;
-          const count = subjects.filter(s => s.categoryId === cat.id).length;
+          const isSelected = selectedCategoryIds.includes(cat.id);
+          const count = subjects.filter(s => getSubjectCategoryIds(s).includes(cat.id)).length;
+
+          const handleTogglePill = () => {
+            if (selectedCategoryIds.length === 0) {
+              setSelectedCategoryIds([cat.id]);
+            } else if (selectedCategoryIds.includes(cat.id)) {
+              const next = selectedCategoryIds.filter(id => id !== cat.id);
+              setSelectedCategoryIds(next);
+            } else {
+              setSelectedCategoryIds([...selectedCategoryIds, cat.id]);
+            }
+          };
 
           return (
             <div
               key={cat.id}
               className={`flex items-center gap-1.5 pl-3 pr-2 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 border ${
                 isSelected
-                  ? 'bg-slate-800 text-white border-indigo-500 shadow-sm'
+                  ? 'bg-indigo-950/70 text-white border-indigo-500 shadow-sm ring-1 ring-indigo-500/30'
                   : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:text-white'
               }`}
             >
               <button
-                onClick={() => setSelectedCategoryFilter(cat.id)}
+                onClick={handleTogglePill}
                 className="flex items-center gap-1.5"
               >
-                <span className={`w-2 h-2 rounded-full bg-${cat.color}-400`} />
+                {isSelected && <Check className="w-3 h-3 text-indigo-400" />}
+                <span className={`w-2 h-2 rounded-full ${getDotColorClass(cat.color)}`} />
                 <span>{cat.name}</span>
                 <span className="text-[11px] font-mono text-slate-500">({count})</span>
               </button>
 
               <button
+                onClick={() => handleEditCategory(cat)}
+                title="Edit category"
+                className="text-slate-600 hover:text-indigo-300 ml-1 p-0.5 rounded transition-colors"
+              >
+                <Edit3 className="w-3 h-3" />
+              </button>
+
+              <button
                 onClick={() => onDeleteCategory(cat.id)}
                 title="Delete category"
-                className="text-slate-600 hover:text-rose-400 ml-1 p-0.5 rounded transition-colors"
+                className="text-slate-600 hover:text-rose-400 p-0.5 rounded transition-colors"
               >
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -327,10 +401,9 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
             </div>
           ) : (
             filteredSubjects.map(subject => {
-              const category = categories.find(c => c.id === subject.categoryId);
-              const schedule = schedules.find(s => s.id === subject.scheduleId);
+              const subjectCats = getSubjectCategories(subject, categories);
+              const subjectAccent = getSubjectColor(subject, categories);
               const isDue = subject.nextDueDate <= todayStr;
-              const color = category?.color || 'indigo';
 
               return (
                 <div
@@ -344,11 +417,19 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
                   <div className="space-y-2">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border inline-block mb-1.5 ${getColorClasses(color)}`}>
-                          {subject.categoryName}
-                        </span>
-                        <h3 className="text-base font-bold text-slate-100 leading-snug">
-                          {subject.name}
+                        <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                          {subjectCats.map(cat => (
+                            <span
+                              key={cat.id}
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded border inline-block ${getColorClasses(cat.color)}`}
+                            >
+                              {cat.name}
+                            </span>
+                          ))}
+                        </div>
+                        <h3 className="text-base font-bold text-slate-100 leading-snug flex items-center gap-2">
+                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getDotColorClass(subjectAccent)}`} />
+                          <span>{subject.name}</span>
                         </h3>
                       </div>
 
@@ -415,11 +496,13 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
         </div>
       </div>
 
-      {/* Category Create Modal */}
+      {/* Category Create / Edit Modal */}
       {isCategoryModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-4 sm:p-6 shadow-2xl max-h-[92vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-white mb-4">Create Category</h3>
+            <h3 className="text-lg font-bold text-white mb-4">
+              {categoryForm.id ? 'Edit Category' : 'Create Category'}
+            </h3>
 
             <form onSubmit={handleSaveCategorySubmit} className="space-y-4">
               <div>
@@ -437,21 +520,36 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Accent Color
-                </label>
-                <select
-                  value={categoryForm.color}
-                  onChange={e => setCategoryForm({ ...categoryForm, color: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="indigo">Indigo</option>
-                  <option value="emerald">Emerald</option>
-                  <option value="amber">Amber</option>
-                  <option value="violet">Violet</option>
-                  <option value="rose">Rose</option>
-                  <option value="sky">Sky Blue</option>
-                </select>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Accent Color
+                  </label>
+                  <span className="text-[11px] font-mono text-slate-400 capitalize">
+                    {categoryForm.color || 'indigo'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-6 gap-2 p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+                  {COLOR_PALETTE.map(option => {
+                    const isActive = (categoryForm.color || 'indigo') === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setCategoryForm({ ...categoryForm, color: option.id })}
+                        title={option.label}
+                        className={`h-9 rounded-lg flex items-center justify-center transition-all border ${
+                          isActive
+                            ? `bg-slate-800 border-white/60 ring-2 ${option.ringClass}`
+                            : 'bg-slate-900/70 border-slate-800 hover:border-slate-600'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded-full ${option.swatchClass} flex items-center justify-center`}>
+                          {isActive && <Check className="w-2.5 h-2.5 text-slate-950 stroke-[3]" />}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>
@@ -512,53 +610,156 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Academic Category
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Academic Categories <span className="text-slate-500 font-normal">(select one or more)</span>
                   </label>
-                  {categories.length > 0 ? (
-                    <select
-                      value={subjectForm.categoryId || ''}
-                      onChange={e => setSubjectForm({ ...subjectForm, categoryId: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                      required
-                    >
-                      <option value="">Select Category...</option>
-                      {categories.map(c => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={newCategoryInline}
-                      onChange={e => setNewCategoryInline(e.target.value)}
-                      placeholder="Type category (e.g. Science)"
-                      className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
-                      required
-                    />
-                  )}
+                  <span className="text-[11px] text-indigo-400 font-medium">
+                    {selectedSubjectCategoryIds.length} selected
+                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Revision Schedule Model
-                  </label>
+                {categories.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-950/70 border border-slate-800 rounded-xl">
+                      {categories.map(c => {
+                        const isSelected = selectedSubjectCategoryIds.includes(c.id);
+                        const isPrimary = selectedSubjectCategoryIds[0] === c.id;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => handleToggleSubjectCategory(c.id)}
+                            className={`min-h-[34px] px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all border ${
+                              isSelected
+                                ? 'bg-indigo-600/25 border-indigo-500 text-indigo-200 shadow-xs'
+                                : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${getDotColorClass(c.color)}`} />
+                            <span>{c.name}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-indigo-400 ml-0.5" />}
+                            {isPrimary && (
+                              <span className="text-[9px] uppercase tracking-wider bg-indigo-500/30 text-indigo-300 px-1 py-0.5 rounded font-semibold ml-0.5">
+                                Primary
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Inline Quick-Add Category */}
+                <div className="mt-2 flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={newCategoryInline}
+                    onChange={e => setNewCategoryInline(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleInlineAddCategory();
+                      }
+                    }}
+                    placeholder={
+                      categories.length === 0
+                        ? 'Type category (e.g. Science)'
+                        : 'Quick-add another category...'
+                    }
+                    className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                  />
                   <select
-                    value={subjectForm.scheduleId}
-                    onChange={e => setSubjectForm({ ...subjectForm, scheduleId: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                    value={newCategoryInlineColor}
+                    onChange={e => setNewCategoryInlineColor(e.target.value)}
+                    aria-label="New category color"
+                    className="px-2 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
                   >
-                    {schedules.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
+                    {COLOR_PALETTE.map(opt => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.label}
                       </option>
                     ))}
                   </select>
+                  <button
+                    type="button"
+                    onClick={handleInlineAddCategory}
+                    disabled={!newCategoryInline.trim()}
+                    className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-indigo-300 border border-slate-700 transition-colors shrink-0"
+                  >
+                    + Add
+                  </button>
                 </div>
+
+                {categories.length > 0 && selectedSubjectCategoryIds.length === 0 && !newCategoryInline.trim() && (
+                  <p className="text-[11px] text-amber-400 mt-1">
+                    Please select at least one category for this subject.
+                  </p>
+                )}
+              </div>
+
+              {/* Subject Accent Color Swatch Picker */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Subject Accent Color
+                  </label>
+                  <span className="text-[11px] font-mono text-slate-400 capitalize">
+                    {subjectForm.color || 'Auto (Category)'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setSubjectForm({ ...subjectForm, color: undefined })}
+                    className={`h-8 px-2.5 rounded-lg text-[11px] font-medium border transition-all ${
+                      !subjectForm.color
+                        ? 'bg-indigo-600/25 border-indigo-500 text-indigo-200'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Auto
+                  </button>
+                  {COLOR_PALETTE.map(option => {
+                    const isActive = subjectForm.color === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setSubjectForm({ ...subjectForm, color: option.id })}
+                        title={option.label}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border ${
+                          isActive
+                            ? `bg-slate-800 border-white/60 ring-2 ${option.ringClass}`
+                            : 'bg-slate-900/70 border-slate-800 hover:border-slate-600'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded-full ${option.swatchClass} flex items-center justify-center`}>
+                          {isActive && <Check className="w-2.5 h-2.5 text-slate-950 stroke-[3]" />}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Revision Schedule Model
+                </label>
+                <select
+                  value={subjectForm.scheduleId}
+                  onChange={e => setSubjectForm({ ...subjectForm, scheduleId: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                >
+                  {schedules.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -597,7 +798,8 @@ export const SubjectCategoryManager: React.FC<SubjectCategoryManagerProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="min-h-[44px] px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all active:scale-[0.98]"
+                  disabled={categories.length > 0 && selectedSubjectCategoryIds.length === 0 && !newCategoryInline.trim()}
+                  className="min-h-[44px] px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-sm transition-all active:scale-[0.98]"
                 >
                   Save Subject
                 </button>

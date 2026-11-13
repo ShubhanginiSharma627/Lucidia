@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RevisionSchedule, Category, Subject } from '../types';
-import { simulateScheduleProgression, formatInterval } from '../services/spacedRepetition';
+import { simulateScheduleProgression } from '../services/spacedRepetition';
+import { getSubjectCategoryIds } from '../services/colors';
 import { Sliders, Plus, Check, Calendar, Layers, Trash2 } from 'lucide-react';
 
 interface CustomScheduleManagerProps {
@@ -12,6 +13,8 @@ interface CustomScheduleManagerProps {
   onAssignScheduleToSubject: (subjectId: string, scheduleId: string) => void;
   onAssignScheduleToCategory: (categoryId: string, scheduleId: string) => void;
 }
+
+const DEFAULT_LADDER = [1, 3, 7, 14, 30, 60, 120];
 
 export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
   schedules,
@@ -27,12 +30,31 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
 
   const currentSchedule = schedules.find(s => s.id === selectedScheduleId) || schedules[0];
   const [formData, setFormData] = useState<RevisionSchedule>(currentSchedule);
+  const [ladderInputText, setLadderInputText] = useState<string>(
+    (currentSchedule?.customStepsLadder || DEFAULT_LADDER).join(', ')
+  );
+
+  // Keep selectedScheduleId valid if a schedule is deleted or schedules sync from cloud
+  useEffect(() => {
+    if (!isEditing) {
+      const matched = schedules.find(s => s.id === selectedScheduleId);
+      if (matched) {
+        setFormData(matched);
+        setLadderInputText((matched.customStepsLadder || DEFAULT_LADDER).join(', '));
+      } else if (schedules[0]) {
+        setSelectedScheduleId(schedules[0].id);
+        setFormData(schedules[0]);
+        setLadderInputText((schedules[0].customStepsLadder || DEFAULT_LADDER).join(', '));
+      }
+    }
+  }, [schedules, selectedScheduleId, isEditing]);
 
   const handleSelectSchedule = (id: string) => {
     setSelectedScheduleId(id);
     const target = schedules.find(s => s.id === id);
     if (target) {
       setFormData(target);
+      setLadderInputText((target.customStepsLadder || DEFAULT_LADDER).join(', '));
       setIsEditing(false);
     }
   };
@@ -54,19 +76,34 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
       lapseResetPercentage: 15,
       maximumInterval: 365,
       targetRetention: 0.90,
+      useCustomSteps: true,
       customStepsLadder: [1, 3, 7, 14, 30, 60, 120],
+      createdAt: new Date().toISOString(),
     };
     setFormData(newSchedule);
+    setLadderInputText((newSchedule.customStepsLadder || DEFAULT_LADDER).join(', '));
     setSelectedScheduleId(newId);
     setIsEditing(true);
   };
 
   const handleSave = () => {
-    onSaveSchedule(formData);
+    // Parse final ladder input cleanly on save
+    const parsed = ladderInputText
+      .split(/[\s,]+/)
+      .map(n => Math.round(parseFloat(n.trim())))
+      .filter(n => !isNaN(n) && n > 0);
+
+    const scheduleToSave: RevisionSchedule = {
+      ...formData,
+      customStepsLadder: parsed.length > 0 ? parsed : (formData.customStepsLadder || DEFAULT_LADDER),
+    };
+    onSaveSchedule(scheduleToSave);
+    setFormData(scheduleToSave);
+    setLadderInputText((scheduleToSave.customStepsLadder || DEFAULT_LADDER).join(', '));
     setIsEditing(false);
   };
 
-  const activeScheduleToSimulate = isEditing ? formData : currentSchedule;
+  const activeScheduleToSimulate = isEditing ? formData : (currentSchedule || formData);
   const simulationSteps = simulateScheduleProgression(activeScheduleToSimulate, 8);
 
   const assignedSubjects = subjects.filter(s => s.scheduleId === activeScheduleToSimulate.id);
@@ -74,10 +111,10 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5 sm:space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        <div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4">
+        <div className="min-w-0">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-1 flex items-center gap-2.5">
-            <Sliders className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400" />
+            <Sliders className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-400 shrink-0" />
             <span>Custom Revision Schedules</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
@@ -87,9 +124,9 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
 
         <button
           onClick={handleCreateNew}
-          className="min-h-[44px] flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all whitespace-nowrap self-stretch sm:self-auto active:scale-[0.98]"
+          className="min-h-[42px] flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all whitespace-nowrap shrink-0 self-stretch sm:self-start md:self-auto active:scale-[0.98]"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4 shrink-0" />
           <span>New Custom Schedule</span>
         </button>
       </div>
@@ -162,6 +199,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                   <button
                     onClick={() => {
                       setFormData(currentSchedule);
+                      setLadderInputText((currentSchedule.customStepsLadder || DEFAULT_LADDER).join(', '));
                       setIsEditing(true);
                     }}
                     className="px-3.5 py-1.5 text-xs font-semibold text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
@@ -215,7 +253,20 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5">Algorithm Model</label>
                     <select
                       value={formData.algorithm}
-                      onChange={e => setFormData({ ...formData, algorithm: e.target.value as any })}
+                      onChange={e => {
+                        const nextAlgo = e.target.value as RevisionSchedule['algorithm'];
+                        const shouldEnableCustomSteps =
+                          nextAlgo === 'fixed_intervals' ? true : formData.useCustomSteps;
+                        setFormData({
+                          ...formData,
+                          algorithm: nextAlgo,
+                          useCustomSteps: shouldEnableCustomSteps,
+                          customStepsLadder:
+                            formData.customStepsLadder && formData.customStepsLadder.length > 0
+                              ? formData.customStepsLadder
+                              : DEFAULT_LADDER,
+                        });
+                      }}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-indigo-500"
                     >
                       <option value="sm2_custom">SM-2 Adaptive (Ease Factor Multiplier)</option>
@@ -316,26 +367,91 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                 </div>
 
                 {/* Custom Step Ladder Array */}
-                <div className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl">
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Custom Step Interval Sequence (Days)
-                  </label>
+                <div className="p-3.5 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-200">
+                        Custom Step Interval Sequence (Days)
+                      </label>
+                      <p className="text-[11px] text-slate-500">
+                        Explicit sequence of days (comma-separated) for milestone pacing.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          useCustomSteps: !(formData.useCustomSteps || formData.algorithm === 'fixed_intervals'),
+                        })
+                      }
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors flex items-center gap-1.5 ${
+                        formData.useCustomSteps || formData.algorithm === 'fixed_intervals'
+                          ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                          : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          formData.useCustomSteps || formData.algorithm === 'fixed_intervals'
+                            ? 'bg-emerald-400'
+                            : 'bg-slate-600'
+                        }`}
+                      />
+                      <span>
+                        {formData.useCustomSteps || formData.algorithm === 'fixed_intervals'
+                          ? 'Custom Steps Active'
+                          : 'Use Custom Steps'}
+                      </span>
+                    </button>
+                  </div>
+
                   <input
                     type="text"
-                    value={(formData.customStepsLadder || [1, 3, 7, 14, 30, 60, 120]).join(', ')}
+                    value={ladderInputText}
                     onChange={e => {
-                      const parsed = e.target.value
-                        .split(',')
-                        .map(n => parseFloat(n.trim()))
+                      const raw = e.target.value;
+                      setLadderInputText(raw);
+                      const parsed = raw
+                        .split(/[\s,]+/)
+                        .map(n => Math.round(parseFloat(n.trim())))
                         .filter(n => !isNaN(n) && n > 0);
-                      setFormData({ ...formData, customStepsLadder: parsed });
+                      if (parsed.length > 0) {
+                        const maxParsed = Math.max(...parsed);
+                        setFormData({
+                          ...formData,
+                          useCustomSteps: true,
+                          customStepsLadder: parsed,
+                          maximumInterval: Math.max(formData.maximumInterval, maxParsed),
+                        });
+                      } else {
+                        setFormData({
+                          ...formData,
+                          customStepsLadder: [],
+                        });
+                      }
                     }}
                     placeholder="e.g. 1, 3, 7, 14, 30, 60, 120"
                     className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-slate-100 font-mono focus:outline-none focus:border-indigo-500"
                   />
-                  <div className="text-[11px] text-slate-500 mt-1">
-                    Explicit sequence of days (comma-separated) for milestone pacing.
-                  </div>
+
+                  {/* Live Parsed Steps Preview */}
+                  {formData.customStepsLadder && formData.customStepsLadder.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mr-1">
+                        Active Sequence:
+                      </span>
+                      {formData.customStepsLadder.map((days, idx) => (
+                        <span
+                          key={`${idx}-${days}`}
+                          className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/30 text-indigo-300"
+                        >
+                          S{idx + 1}: {days}d
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -364,7 +480,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
 
           {/* Live Schedule Progression Simulator Visualizer */}
           <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-emerald-400" />
@@ -375,8 +491,18 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                 </div>
               </div>
 
-              <div className="text-xs font-mono text-emerald-400/90 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-md">
-                30d Milestone at Review #{simulationSteps.find(s => s.intervalDays >= 30)?.step || 5}
+              <div className="flex items-center gap-2 flex-wrap">
+                {(activeScheduleToSimulate.useCustomSteps || activeScheduleToSimulate.algorithm === 'fixed_intervals') &&
+                  activeScheduleToSimulate.customStepsLadder &&
+                  activeScheduleToSimulate.customStepsLadder.length > 0 && (
+                    <div className="text-[11px] font-mono text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-2.5 py-1 rounded-md">
+                      Custom Steps ({activeScheduleToSimulate.customStepsLadder.slice(0, 5).join(', ')}
+                      {activeScheduleToSimulate.customStepsLadder.length > 5 ? ', …' : ''})
+                    </div>
+                  )}
+                <div className="text-xs font-mono text-emerald-400/90 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-md">
+                  30d Milestone at Review #{simulationSteps.find(s => s.intervalDays >= 30)?.step || 5}
+                </div>
               </div>
             </div>
 
@@ -391,9 +517,9 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                     <div className="flex-1 h-6 bg-slate-950 rounded-md overflow-hidden relative border border-slate-800/80">
                       <div
                         className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 rounded-md transition-all duration-300 flex items-center justify-end px-2"
-                        style={{ width: `${percentage}%` }}
+                        style={{ width: `${percentage}%`, minWidth: '2.75rem' }}
                       >
-                        <span className="font-mono text-[11px] text-white font-semibold tabular-nums drop-shadow">
+                        <span className="font-mono text-[11px] text-white font-semibold tabular-nums drop-shadow whitespace-nowrap">
                           {step.formatted}
                         </span>
                       </div>
@@ -424,7 +550,7 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
               <div className="text-xs font-semibold text-slate-300">Assign to Entire Category:</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {categories.map(cat => {
-                  const subsInCat = subjects.filter(s => s.categoryId === cat.id);
+                  const subsInCat = subjects.filter(s => getSubjectCategoryIds(s).includes(cat.id));
                   const isAllAssigned = subsInCat.length > 0 && subsInCat.every(s => s.scheduleId === activeScheduleToSimulate.id);
 
                   return (
@@ -467,7 +593,11 @@ export const CustomScheduleManager: React.FC<CustomScheduleManagerProps> = ({
                     >
                       <div className="truncate mr-2">
                         <div className="text-xs font-medium text-slate-200 truncate">{subject.name}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">{subject.categoryName}</div>
+                        <div className="text-[10px] text-slate-500 font-mono truncate">
+                          {subject.categoryNames && subject.categoryNames.length > 0
+                            ? subject.categoryNames.join(', ')
+                            : subject.categoryName}
+                        </div>
                       </div>
 
                       <button

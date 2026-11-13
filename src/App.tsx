@@ -27,7 +27,13 @@ import {
   syncLog,
   subscribeToUserUserData,
 } from './services/firebase';
-import { calculateNextSubjectRevision, formatDateToYYYYMMDD } from './services/spacedRepetition';
+import {
+  calculateNextSubjectRevision,
+  formatDateToYYYYMMDD,
+  PRESET_SCHEDULES,
+  recalculateSubjectForSchedule,
+} from './services/spacedRepetition';
+import { getSubjectCategoryIds } from './services/colors';
 import {
   UserGamificationProfile,
   Achievement,
@@ -100,10 +106,16 @@ export default function App() {
             saveSubjects(remoteSubs);
           },
           onSchedules: remoteScheds => {
-            if (remoteScheds.length > 0) {
-              setSchedules(remoteScheds);
-              saveSchedules(remoteScheds);
+            const mergedMap = new Map<string, RevisionSchedule>();
+            for (const preset of PRESET_SCHEDULES) {
+              mergedMap.set(preset.id, preset);
             }
+            for (const remote of remoteScheds) {
+              mergedMap.set(remote.id, remote);
+            }
+            const merged = Array.from(mergedMap.values());
+            setSchedules(merged);
+            saveSchedules(merged);
           },
           onLogs: remoteLogs => {
             setLogs(remoteLogs);
@@ -232,17 +244,31 @@ export default function App() {
   // Subject management
   const handleSaveSubject = useCallback(
     (subject: Subject) => {
+      let subjectToSave = subject;
+      const prevSubject = subjects.find(s => s.id === subject.id);
+      if (
+        prevSubject &&
+        prevSubject.scheduleId !== subject.scheduleId &&
+        prevSubject.nextDueDate === subject.nextDueDate &&
+        subject.revisionStage >= 1
+      ) {
+        const targetSchedule = schedules.find(sc => sc.id === subject.scheduleId);
+        if (targetSchedule) {
+          subjectToSave = recalculateSubjectForSchedule(subject, targetSchedule, logs);
+        }
+      }
+
       setSubjects(prev => {
-        const exists = prev.some(s => s.id === subject.id);
-        if (exists) return prev.map(s => (s.id === subject.id ? subject : s));
-        return [subject, ...prev];
+        const exists = prev.some(s => s.id === subjectToSave.id);
+        if (exists) return prev.map(s => (s.id === subjectToSave.id ? subjectToSave : s));
+        return [subjectToSave, ...prev];
       });
 
       if (user) {
-        syncSubject(user.uid, subject);
+        syncSubject(user.uid, subjectToSave);
       }
     },
-    [user]
+    [user, subjects, schedules, logs]
   );
 
   const handleDeleteSubject = useCallback(
@@ -273,13 +299,49 @@ export default function App() {
 
   const handleDeleteCategory = useCallback(
     (categoryId: string) => {
-      setCategories(prev => prev.filter(c => c.id !== categoryId));
-      setSubjects(prev => prev.filter(s => s.categoryId !== categoryId));
+      const remainingCategories = categories.filter(c => c.id !== categoryId);
+      setCategories(remainingCategories);
+
+      setSubjects(prev => {
+        const nextSubjects: Subject[] = [];
+        for (const subj of prev) {
+          const currentIds = getSubjectCategoryIds(subj);
+          if (!currentIds.includes(categoryId)) {
+            nextSubjects.push(subj);
+            continue;
+          }
+
+          const remainingIds = currentIds.filter(id => id !== categoryId);
+          if (remainingIds.length === 0) {
+            if (user) {
+              deleteSubjectDoc(user.uid, subj.id);
+            }
+            continue;
+          }
+
+          const remainingNames = remainingIds.map(
+            id => remainingCategories.find(c => c.id === id)?.name || 'General'
+          );
+          const updatedSubj: Subject = {
+            ...subj,
+            categoryId: remainingIds[0],
+            categoryName: remainingNames[0],
+            categoryIds: remainingIds,
+            categoryNames: remainingNames,
+          };
+          if (user) {
+            syncSubject(user.uid, updatedSubj);
+          }
+          nextSubjects.push(updatedSubj);
+        }
+        return nextSubjects;
+      });
+
       if (user) {
         deleteCategoryDoc(user.uid, categoryId);
       }
     },
-    [user]
+    [categories, user]
   );
 
   // Schedule management
@@ -291,18 +353,42 @@ export default function App() {
         return [...prev, schedule];
       });
 
+      // Recalculate all subjects already assigned to this schedule
+      setSubjects(prev =>
+        prev.map(s => {
+          if (s.scheduleId === schedule.id) {
+            const recalculated = recalculateSubjectForSchedule(s, schedule, logs);
+            if (
+              user &&
+              (recalculated.intervalDays !== s.intervalDays || recalculated.nextDueDate !== s.nextDueDate)
+            ) {
+              syncSubject(user.uid, recalculated);
+            }
+            return recalculated;
+          }
+          return s;
+        })
+      );
+
       if (user) {
         syncSchedule(user.uid, schedule);
       }
     },
-    [user]
+    [user, logs]
   );
 
   const handleDeleteSchedule = useCallback(
     (scheduleId: string) => {
       setSchedules(prev => prev.filter(s => s.id !== scheduleId));
       setSubjects(prev =>
-        prev.map(s => (s.scheduleId === scheduleId ? { ...s, scheduleId: 'lucidia-adaptive' } : s))
+        prev.map(s => {
+          if (s.scheduleId === scheduleId) {
+            const updated = { ...s, scheduleId: 'lucidia-adaptive' };
+            if (user) syncSubject(user.uid, updated);
+            return updated;
+          }
+          return s;
+        })
       );
       if (user) {
         deleteScheduleDoc(user.uid, scheduleId);
@@ -313,10 +399,14 @@ export default function App() {
 
   const handleAssignScheduleToSubject = useCallback(
     (subjectId: string, scheduleId: string) => {
+      const targetSchedule = schedules.find(sc => sc.id === scheduleId);
       setSubjects(prev =>
         prev.map(s => {
           if (s.id === subjectId) {
-            const updated = { ...s, scheduleId };
+            const withSchedule = { ...s, scheduleId };
+            const updated = targetSchedule
+              ? recalculateSubjectForSchedule(withSchedule, targetSchedule, logs)
+              : withSchedule;
             if (user) syncSubject(user.uid, updated);
             return updated;
           }
@@ -324,15 +414,19 @@ export default function App() {
         })
       );
     },
-    [user]
+    [user, schedules, logs]
   );
 
   const handleAssignScheduleToCategory = useCallback(
     (categoryId: string, scheduleId: string) => {
+      const targetSchedule = schedules.find(sc => sc.id === scheduleId);
       setSubjects(prev =>
         prev.map(s => {
-          if (s.categoryId === categoryId) {
-            const updated = { ...s, scheduleId };
+          if (getSubjectCategoryIds(s).includes(categoryId)) {
+            const withSchedule = { ...s, scheduleId };
+            const updated = targetSchedule
+              ? recalculateSubjectForSchedule(withSchedule, targetSchedule, logs)
+              : withSchedule;
             if (user) syncSubject(user.uid, updated);
             return updated;
           }
@@ -340,28 +434,22 @@ export default function App() {
         })
       );
     },
-    [user]
+    [user, schedules, logs]
   );
 
   const handleApplyScheduleRecommendation = useCallback(
     (multiplier: number, targetRetention: number) => {
-      setSchedules(prev => {
-        return prev.map((s, idx) => {
-          if (idx === 0) {
-            const updated = {
-              ...s,
-              intervalMultiplier: multiplier,
-              targetRetention,
-            };
-            if (user) syncSchedule(user.uid, updated);
-            return updated;
-          }
-          return s;
-        });
-      });
+      const baseSchedule = schedules[0];
+      if (!baseSchedule) return;
+      const updatedSchedule: RevisionSchedule = {
+        ...baseSchedule,
+        intervalMultiplier: multiplier,
+        targetRetention,
+      };
+      handleSaveSchedule(updatedSchedule);
       setActiveTab('schedules');
     },
-    [user]
+    [schedules, handleSaveSchedule]
   );
 
   // AI Cognitive Audit

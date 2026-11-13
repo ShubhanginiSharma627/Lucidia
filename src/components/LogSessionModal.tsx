@@ -54,7 +54,9 @@ export const LogSessionModal: React.FC<LogSessionModalProps> = ({
         <div className="flex items-start justify-between gap-4 pb-3 border-b border-slate-800">
           <div>
             <span className="text-[11px] font-semibold text-indigo-400 uppercase tracking-wider font-mono">
-              {subject.categoryName}
+              {subject.categoryNames && subject.categoryNames.length > 0
+                ? subject.categoryNames.join(' · ')
+                : subject.categoryName}
             </span>
             <h3 className="text-base font-bold text-white leading-snug">
               Log Revision: {subject.name}
