@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User } from 'firebase/auth';
 import { Subject, Category, RevisionLog, RevisionSchedule } from '../types';
 import { formatDateToYYYYMMDD, formatInterval } from '../services/spacedRepetition';
@@ -28,6 +28,9 @@ interface RevisionCalendarProps {
   onOpenAddSubject: (preselectedDate?: string) => void;
 }
 
+const URGENT_OVERDUE_DAYS = 3;
+const AUTO_HIDE_DURATION_MS = 5000;
+
 export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
   subjects,
   categories,
@@ -42,14 +45,22 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string>(() => formatDateToYYYYMMDD(new Date()));
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [isBannerHovered, setIsBannerHovered] = useState(false);
+  const [isBannerFocused, setIsBannerFocused] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState(5);
+
+  const remainingMsRef = useRef<number>(AUTO_HIDE_DURATION_MS);
+  const activeAutoHideKeyRef = useRef<string>('');
+  const onDismissRef = useRef(onDismissFocusBanner);
+  onDismissRef.current = onDismissFocusBanner;
 
   const todayStr = formatDateToYYYYMMDD(new Date());
 
-  // Top 3 most overdue past-due subjects before today (shown only when signed in)
-  const mostOverdueData = useMemo(() => {
+  // Top 3 most urgent (oldest due first: >=3d overdue stays pinned; 1-2d overdue or due-today auto-hides after 5s)
+  const focusBannerData = useMemo(() => {
     const todayMs = new Date(todayStr + 'T00:00:00').getTime();
-    const pastDue = subjects
-      .filter(s => s.nextDueDate < todayStr)
+    const dueOrOverdue = subjects
+      .filter(s => s.nextDueDate <= todayStr)
       .sort((a, b) => {
         const byDate = a.nextDueDate.localeCompare(b.nextDueDate);
         if (byDate !== 0) return byDate;
@@ -57,20 +68,69 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
         return a.name.localeCompare(b.name);
       });
 
-    const topOverdue = pastDue.slice(0, 3).map(subject => {
+    const enriched = dueOrOverdue.map(subject => {
       const dueMs = new Date(subject.nextDueDate + 'T00:00:00').getTime();
-      const daysOverdue = Math.max(1, Math.round((todayMs - dueMs) / (1000 * 60 * 60 * 24)));
+      const daysOverdue = Math.max(0, Math.round((todayMs - dueMs) / (1000 * 60 * 60 * 24)));
       return { subject, daysOverdue };
     });
 
+    const urgentCount = enriched.filter(item => item.daysOverdue >= URGENT_OVERDUE_DAYS).length;
+
     return {
-      topOverdue,
-      totalOverdueCount: pastDue.length,
+      focusItems: enriched.slice(0, 3),
+      totalCount: enriched.length,
+      urgentCount,
+      hasUrgentOverdue: urgentCount > 0,
     };
   }, [subjects, todayStr]);
 
   const showFocusBanner =
-    Boolean(user) && !isFocusBannerDismissed && mostOverdueData.topOverdue.length > 0;
+    Boolean(user) && !isFocusBannerDismissed && focusBannerData.focusItems.length > 0;
+  const shouldAutoHide = showFocusBanner && !focusBannerData.hasUrgentOverdue;
+  const isTimerPaused = isBannerHovered || isBannerFocused;
+
+  // Reset the 5-second budget cleanly when entering non-urgent browsing mode for a signed-in user
+  const autoHideSessionKey = shouldAutoHide && user ? user.uid : '';
+  if (activeAutoHideKeyRef.current !== autoHideSessionKey) {
+    activeAutoHideKeyRef.current = autoHideSessionKey;
+    remainingMsRef.current = AUTO_HIDE_DURATION_MS;
+  }
+
+  useEffect(() => {
+    if (!shouldAutoHide) {
+      setIsBannerHovered(false);
+      setIsBannerFocused(false);
+      setSecondsRemaining(5);
+      return;
+    }
+
+    if (isTimerPaused) {
+      return;
+    }
+
+    const startedAt = Date.now();
+    const initialBudget = remainingMsRef.current;
+    setSecondsRemaining(Math.max(1, Math.ceil(initialBudget / 1000)));
+
+    const hideTimer = window.setTimeout(() => {
+      remainingMsRef.current = 0;
+      setSecondsRemaining(0);
+      onDismissRef.current?.();
+    }, initialBudget);
+
+    const tickInterval = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const left = Math.max(0, initialBudget - elapsed);
+      setSecondsRemaining(Math.max(1, Math.ceil(left / 1000)));
+    }, 250);
+
+    return () => {
+      window.clearTimeout(hideTimer);
+      window.clearInterval(tickInterval);
+      const elapsed = Date.now() - startedAt;
+      remainingMsRef.current = Math.max(0, initialBudget - elapsed);
+    };
+  }, [shouldAutoHide, isTimerPaused, autoHideSessionKey]);
 
   // Filter subjects by chosen multiple categories
   const filteredSubjects = useMemo(() => {
@@ -184,30 +244,62 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
         </div>
       </div>
 
-      {/* Today's Focus Banner (Logged-in users with past-due subjects) */}
+      {/* Today's Focus Banner (Pinned for 3+ days overdue; 5s auto-hide when browsing 1-2d/due-today) */}
       {showFocusBanner && (
         <section
           aria-label="Today's Focus"
-          className="bg-slate-900/90 border border-amber-500/35 rounded-2xl p-3.5 sm:p-4 shadow-lg space-y-3 min-w-0 max-w-full"
+          onMouseEnter={() => setIsBannerHovered(true)}
+          onMouseLeave={() => setIsBannerHovered(false)}
+          onFocus={() => setIsBannerFocused(true)}
+          onBlur={e => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+              setIsBannerFocused(false);
+            }
+          }}
+          className={`bg-slate-900/90 border rounded-2xl p-3.5 sm:p-4 shadow-lg space-y-3 min-w-0 max-w-full transition-colors ${
+            focusBannerData.hasUrgentOverdue ? 'border-amber-500/35' : 'border-indigo-500/35'
+          }`}
         >
           <div className="flex items-start justify-between gap-3 min-w-0">
             <div className="min-w-0 flex-1 space-y-0.5">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                {focusBannerData.hasUrgentOverdue ? (
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                ) : (
+                  <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
+                )}
                 <h2 className="text-sm font-bold text-white tracking-tight">
                   Today&apos;s Focus
                 </h2>
                 <span aria-hidden="true" className="text-slate-600 text-xs">·</span>
-                <span className="text-xs font-mono tabular-nums text-amber-300/90">
-                  {mostOverdueData.totalOverdueCount > 3
-                    ? `Top 3 of ${mostOverdueData.totalOverdueCount} overdue`
-                    : `${mostOverdueData.topOverdue.length} overdue ${
-                        mostOverdueData.topOverdue.length === 1 ? 'subject' : 'subjects'
-                      }`}
+                <span
+                  className={`text-xs font-mono tabular-nums ${
+                    focusBannerData.hasUrgentOverdue ? 'text-amber-300/90' : 'text-indigo-300/90'
+                  }`}
+                >
+                  {focusBannerData.hasUrgentOverdue
+                    ? focusBannerData.totalCount > 3
+                      ? `Urgent · Top 3 of ${focusBannerData.totalCount}`
+                      : `Urgent · ${focusBannerData.urgentCount} overdue 3+ days`
+                    : focusBannerData.totalCount > 3
+                    ? `Top 3 of ${focusBannerData.totalCount} due`
+                    : `${focusBannerData.focusItems.length} ${
+                        focusBannerData.focusItems.length === 1 ? 'topic' : 'topics'
+                      } ready`}
                 </span>
+                {shouldAutoHide && (
+                  <>
+                    <span aria-hidden="true" className="text-slate-600 text-xs">·</span>
+                    <span className="text-[11px] font-mono tabular-nums text-slate-400">
+                      {isTimerPaused ? 'Paused' : `Auto-hides in ${secondsRemaining}s`}
+                    </span>
+                  </>
+                )}
               </div>
               <p className="text-xs text-slate-400">
-                Prioritize your oldest missed revisions first—tap any topic to log a catch-up session.
+                {focusBannerData.hasUrgentOverdue
+                  ? 'Overdue 3+ days — stays pinned until logged or dismissed.'
+                  : 'Due today or mildly overdue — hover to pause, or tap any topic to log.'}
               </p>
             </div>
 
@@ -224,16 +316,19 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 min-w-0">
-            {mostOverdueData.topOverdue.map(({ subject, daysOverdue }) => {
+            {focusBannerData.focusItems.map(({ subject, daysOverdue }) => {
               const subjectAccent = getSubjectColor(subject, categories);
               const primaryCategory = getSubjectCategories(subject, categories)[0];
+              const isItemUrgent = daysOverdue >= URGENT_OVERDUE_DAYS;
 
               return (
                 <button
                   key={subject.id}
                   type="button"
                   onClick={() => onOpenLogSession(subject, todayStr)}
-                  className="text-left p-3 bg-slate-950/75 hover:bg-slate-950 border border-slate-800 hover:border-amber-500/45 rounded-xl transition-all flex items-center justify-between gap-2.5 min-w-0 active:scale-[0.99]"
+                  className={`text-left p-3 bg-slate-950/75 hover:bg-slate-950 border border-slate-800 rounded-xl transition-all flex items-center justify-between gap-2.5 min-w-0 active:scale-[0.99] ${
+                    isItemUrgent ? 'hover:border-amber-500/45' : 'hover:border-indigo-500/45'
+                  }`}
                 >
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center gap-2 min-w-0">
@@ -244,8 +339,8 @@ export const RevisionCalendar: React.FC<RevisionCalendarProps> = ({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-4 text-[11px] font-mono tabular-nums text-slate-400">
-                      <span className="text-amber-400 font-semibold">
-                        {daysOverdue}d overdue
+                      <span className={`font-semibold ${isItemUrgent ? 'text-amber-400' : 'text-indigo-300'}`}>
+                        {daysOverdue === 0 ? 'Due today' : `${daysOverdue}d overdue`}
                       </span>
                       <span aria-hidden="true" className="text-slate-600">·</span>
                       <span>Stage {subject.revisionStage}</span>
