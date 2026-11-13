@@ -33,9 +33,14 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Zone 1: Brand Wordmark (Single text element) */}
         <button
           onClick={() => onTabChange('calendar')}
-          className="text-base sm:text-lg font-bold tracking-tight text-white hover:text-indigo-300 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 sm:gap-2"
+          className="text-base sm:text-lg font-bold tracking-tight text-white hover:text-indigo-300 transition-colors whitespace-nowrap shrink-0 flex items-center gap-2"
         >
-          <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500 rotate-45 inline-block" aria-hidden="true" />
+          <img
+            src="/favicon.ico"
+            alt="Lucidia icon"
+            referrerPolicy="no-referrer"
+            className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg object-cover border border-indigo-400/30 shadow-sm shrink-0"
+          />
           <span>Lucidia</span>
         </button>
 

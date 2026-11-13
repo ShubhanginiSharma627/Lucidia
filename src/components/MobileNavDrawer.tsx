@@ -120,8 +120,13 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
         {/* Top Header */}
         <div>
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-[#090d16]">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500 rotate-45 inline-block" aria-hidden="true" />
+            <div className="flex items-center gap-2.5">
+              <img
+                src="/favicon.ico"
+                alt="Lucidia icon"
+                referrerPolicy="no-referrer"
+                className="w-6 h-6 rounded-lg object-cover border border-indigo-400/30 shadow-sm shrink-0"
+              />
               <span className="text-base font-bold tracking-tight text-white">Lucidia</span>
             </div>
 
